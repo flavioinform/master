@@ -7,8 +7,8 @@ import DirectivaRoute from "@/components/DirectivaRoute";
 import { SidebarProvider } from "@/components/ui/sidebar";
 
 import Home from "./pages/Home";
-import Login from "@/pages/Login";
-import Registro from "@/pages/Registro";
+import Login from "@/pages/login";
+import Registro from "@/pages/registro";
 import Dashboard from "@/pages/Dashboard";
 import Historial from "./pages/dashboard/Historial";
 
