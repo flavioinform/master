@@ -11,6 +11,8 @@ import Login from "@/pages/login";
 import Registro from "@/pages/registro";
 import Dashboard from "@/pages/Dashboard";
 import Historial from "./pages/dashboard/Historial";
+import Nosotros from "./pages/Nosotros";
+import Mision from "./pages/Mision";
 
 // Socio
 import Vouchers from "@/pages/dashboard/Vouchers";
@@ -23,7 +25,10 @@ import ConvocatoriaInscripcion from "@/pages/dashboard/ConvocatoriaInscripcion";
 // Directiva
 import VouchersAdmin from "@/pages/dashboard/VouchersAdmin";
 import CrearConvocatoria from "@/pages/dashboard/directiva/CrearConvocatoria";
+import CompetitionManager from "@/pages/dashboard/directiva/CompetitionManager";
 import PerfilesAdmin from "@/pages/dashboard/directiva/PerfilesAdmin";
+import DashboardHome from "@/pages/dashboard/DashboardHome";
+import CalendarioCompetencias from "@/pages/dashboard/CalendarioCompetencias";
 
 function App() {
   return (
@@ -61,6 +66,26 @@ function App() {
             }
           />
 
+          <Route
+            path="/nosotros"
+            element={
+              <>
+                <Navbar />
+                <Nosotros />
+              </>
+            }
+          />
+
+          <Route
+            path="/mision"
+            element={
+              <>
+                <Navbar />
+                <Mision />
+              </>
+            }
+          />
+
           {/* ================== PRIVADAS (CON SIDEBAR) ================== */}
           <Route
             path="/dashboard"
@@ -73,27 +98,7 @@ function App() {
             }
           >
             {/* Inicio dashboard */}
-             <Route 
-              index 
-              element={
-                <div className="p-6 bg-white rounded-2xl shadow">
-                  <h2 className="text-xl font-semibold">Bienvenido a Club Master Iquique</h2>
-                  <p className="text-sm text-gray-600 mt-2">
-                    Aquí puedes gestionar tu perfil, vouchers, y las convocatorias. 
-                    Accede a todas las funcionalidades de tu cuenta y más.
-                  </p>
-                  {/* Agrega cualquier otro contenido aquí */}
-                  <div className="mt-6">
-                    <p className="font-medium">Explora las siguientes secciones:</p>
-                    <ul className="list-disc pl-6">
-                      <li>Gestión de vouchers</li>
-                      <li>Perfil y datos </li>
-                      <li>Historial de inscripciones</li>
-                    </ul>
-                  </div>
-                </div>
-              } 
-            />
+            <Route index element={<DashboardHome />} />
             {/* Socio */}
             <Route path="vouchers" element={<Vouchers />} />
             <Route path="perfil" element={<Perfil />} />
@@ -102,6 +107,9 @@ function App() {
             {/* Convocatorias */}
             <Route path="convocatorias" element={<ConvocatoriasList />} />
             <Route path="convocatorias/:id" element={<ConvocatoriaInscripcion />} />
+
+            {/* Calendario */}
+            <Route path="calendario" element={<CalendarioCompetencias />} />
 
             {/* Directiva */}
             <Route
@@ -118,6 +126,15 @@ function App() {
               element={
                 <DirectivaRoute>
                   <CrearConvocatoria />
+                </DirectivaRoute>
+              }
+            />
+
+            <Route
+              path="directiva/competencia/:id"
+              element={
+                <DirectivaRoute>
+                  <CompetitionManager />
                 </DirectivaRoute>
               }
             />

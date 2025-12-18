@@ -1,48 +1,54 @@
- import { Link} from "react-router-dom";
-//import Login from "@/pages/login";
-// import { useContext } from "react";
+import { Link } from "react-router-dom";
+import logo from "../assets/galeria/master12.png";
 
+function Navbar() {
+  return (
+    <div className="sticky top-0 z-50 bg-white shadow-[0_4px_20px_-10px_rgba(14,165,233,0.15)] border-b border-sky-50">
+      <header className="container mx-auto px-6 py-3">
+        <nav className="flex items-center justify-between">
 
-function Navbar(){
-   
-    // falta aplicar logica 
-
-
-  
-    return(
-      <div>
-       <header className="bg-gradient-to-r from-blue-400 via-blue-200 to-white shadow-lg sticky top-0 z-50 border-b border-blue-500/50">
-        <nav className=" container mx-auto px-6 py-6 ">
-
-            <div className="flex items-center justify-between">
-              
-           
-            <div className="flex items-center gap-2">
-                <div className="p-2 rounded">
-                    <span className="text-white font-bold text-3xl"> Master</span>
-                </div>
+          {/* Logo & Brand */}
+          <Link to="/" className="flex items-center gap-3 group">
+            <div className="bg-sky-50 p-1 rounded-xl group-hover:bg-sky-100 transition-colors">
+              <img src={logo} alt="Club Master Iquique" className="h-10 w-auto" />
             </div>
-
-             <div className=" flex  text-blue-500 text-xl font-semibold items-center gap-50 ">
-                <Link to="/registro" className=" hover:text-blue-400">
-                  Registro
-                </Link>
-                {/* <Link to="7mision" className="text-blue hover:text-blue-400">
-                  Mision
-                </Link>
-                <Link to="7servicios" className="text-blue hover:text-blue-400">
-                  Servicios
-                </Link> */}
-               <Link to="/login" className="text-blue hover:text-blue-400">
-  Iniciar sesión
-</Link>
-             </div>
-
+            <div className="flex flex-col">
+              <span className="text-slate-900 font-black text-xl leading-none uppercase tracking-tighter">
+                Master <span className="text-sky-600">Iquique</span>
+              </span>
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mt-1">
+                Club Deportivo
+              </span>
             </div>
-           
+          </Link>
+
+          {/* Navigation Links */}
+          <div className="hidden lg:flex items-center gap-10">
+            <Link to="/nosotros" className="text-slate-600 font-bold text-sm uppercase tracking-widest hover:text-sky-600 transition-colors">
+              Nosotros
+            </Link>
+            <Link to="/mision" className="text-slate-600 font-bold text-sm uppercase tracking-widest hover:text-sky-600 transition-colors">
+              Misión
+            </Link>
+            {/* <Link to="#contacto" className="text-slate-600 font-bold text-sm uppercase tracking-widest hover:text-sky-600 transition-colors">
+              Contactanos
+            </Link> */}
+          </div>
+
+          {/* Auth Button */}
+          <div className="flex items-center gap-4">
+            <Link
+              to="/login"
+              className="bg-sky-600 hover:bg-sky-700 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest transition-all shadow-lg shadow-sky-100 hover:scale-105 active:scale-95"
+            >
+              Portal Socios
+            </Link>
+          </div>
+
         </nav>
+      </header>
+    </div>
+  );
+}
 
-       </header>
-      </div>
-    )
-}export default Navbar;
+export default Navbar;

@@ -1,4 +1,4 @@
-import { useEffect,  useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import { supabase } from "@/lib/supabase";
 import { Link } from "react-router-dom";
 import { AppContext } from "@/context/AppContext";
@@ -8,7 +8,7 @@ export default function ConvocatoriasList() {
 
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState([]);
-  const [inscritasSet, setInscritasSet] = useState(new Set());
+  const [enrolledSet, setEnrolledSet] = useState(new Set());
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
@@ -17,35 +17,43 @@ export default function ConvocatoriasList() {
       setMsg("");
 
       try {
-        // 1) cargar convocatorias
-        const { data: convocatorias, error: e1 } = await supabase
-          .from("convocatorias")
-          .select("id, club, piscina, fecha_inicio, fecha_fin, estado, created_at")
-          .order("created_at", { ascending: false });
+        // 1) Load competitions (only open/published ones)
+        const { data: competitions, error: e1 } = await supabase
+          .from("competitions")
+          .select("id, name, organizer, start_date, end_date, status")
+          .in("status", ["open", "closed"]) // Show open and closed (but not draft)
+          .order("start_date", { ascending: false });
 
         if (e1) throw e1;
 
-        const list = convocatorias || [];
+        const list = competitions || [];
         setItems(list);
 
-        // 2) cargar inscripciones del usuario para esas convocatorias
+        // 2) Check which competitions user is enrolled in
         if (user?.id && list.length) {
-          const ids = list.map((c) => c.id);
+          const compIds = list.map((c) => c.id);
 
-          const { data: insc, error: e2 } = await supabase
-            .from("inscripciones")
-            .select("convocatoria_id")
-            .eq("user_id", user.id)
-            .in("convocatoria_id", ids);
+          // Get unique competition IDs from enrollments
+          const { data: enrollments, error: e2 } = await supabase
+            .from("competition_enrollments")
+            .select("event_id, competition_events!inner(stage_id, competition_stages!inner(competition_id))")
+            .eq("user_id", user.id);
 
           if (e2) throw e2;
 
-          setInscritasSet(new Set((insc || []).map((x) => x.convocatoria_id)));
+          // Extract competition IDs
+          const enrolled = new Set();
+          (enrollments || []).forEach(e => {
+            const compId = e.competition_events?.competition_stages?.competition_id;
+            if (compId) enrolled.add(compId);
+          });
+
+          setEnrolledSet(enrolled);
         } else {
-          setInscritasSet(new Set());
+          setEnrolledSet(new Set());
         }
       } catch (err) {
-        setMsg(err?.message || "Error cargando convocatorias.");
+        setMsg(err?.message || "Error cargando competencias.");
       } finally {
         setLoading(false);
       }
@@ -58,7 +66,7 @@ export default function ConvocatoriasList() {
 
   return (
     <div className="max-w-5xl space-y-6">
-      <h1 className="text-2xl font-bold">Convocatorias</h1>
+      <h1 className="text-2xl font-bold">Competencias</h1>
 
       {msg && (
         <div className="p-3 rounded-lg border bg-red-50 border-red-200 text-red-700">
@@ -67,11 +75,12 @@ export default function ConvocatoriasList() {
       )}
 
       {items.length === 0 ? (
-        <p className="text-sm text-gray-500">No hay convocatorias todavía.</p>
+        <p className="text-sm text-gray-500">No hay competencias disponibles.</p>
       ) : (
         <div className="space-y-3">
           {items.map((c) => {
-            const yaInscrito = inscritasSet.has(c.id);
+            const yaInscrito = enrolledSet.has(c.id);
+            const isClosed = c.status === 'closed';
 
             return (
               <div
@@ -80,27 +89,31 @@ export default function ConvocatoriasList() {
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="font-semibold">{c.club}</p>
+                    <p className="font-semibold">{c.name}</p>
                     {yaInscrito && (
                       <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">
                         INSCRITO
                       </span>
                     )}
+                    {isClosed && (
+                      <span className="text-xs px-2 py-1 rounded-full bg-red-100 text-red-700 border border-red-200">
+                        CERRADA
+                      </span>
+                    )}
                   </div>
 
                   <p className="text-sm text-gray-600">
-                    {c.piscina ? `${c.piscina} • ` : ""}
-                    {c.fecha_inicio} → {c.fecha_fin} • <b>{c.estado}</b>
+                    {c.organizer} • {new Date(c.start_date).toLocaleDateString()} → {new Date(c.end_date).toLocaleDateString()}
                   </p>
                 </div>
 
-                {yaInscrito ? (
-                  <button
-                    disabled
-                    className="shrink-0 px-4 py-2 rounded-lg bg-gray-200 text-gray-600 cursor-not-allowed"
+                {yaInscrito || isClosed ? (
+                  <Link
+                    to={`/dashboard/convocatorias/${c.id}`}
+                    className="shrink-0 px-4 py-2 rounded-lg bg-gray-600 text-white hover:bg-gray-700"
                   >
-                    Ya inscrito
-                  </button>
+                    Ver Detalles
+                  </Link>
                 ) : (
                   <Link
                     to={`/dashboard/convocatorias/${c.id}`}

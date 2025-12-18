@@ -11,7 +11,27 @@ export default function Perfil() {
     fecha_nacimiento: "",
     telefono: "",
     direccion: "",
+    numero_cuenta: "",
+    banco: "",
   });
+
+  const bancosChile = [
+    "Banco de Chile",
+    "Banco Estado",
+    "Banco Santander",
+    "Banco BCI",
+    "Banco Scotiabank",
+    "Banco Itaú",
+    "Banco Security",
+    "Banco Falabella",
+    "Banco Ripley",
+    "Banco Consorcio",
+    "Banco Internacional",
+    "Banco BICE",
+    "Banco BTG Pactual",
+    "Coopeuch",
+    "Otro"
+  ];
 
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -24,7 +44,7 @@ export default function Perfil() {
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("nombre_completo,rut,fecha_nacimiento,telefono,direccion")
+      .select("nombre_completo,rut,fecha_nacimiento,telefono,direccion,numero_cuenta,banco")
       .eq("id", user.id)
       .single();
 
@@ -38,6 +58,8 @@ export default function Perfil() {
         fecha_nacimiento: data.fecha_nacimiento || "",
         telefono: data.telefono || "",
         direccion: data.direccion || "",
+        numero_cuenta: data.numero_cuenta || "",
+        banco: data.banco || "",
       });
     }
 
@@ -83,11 +105,10 @@ export default function Perfil() {
 
       {msg && (
         <div
-          className={`p-3 rounded-lg border text-sm ${
-            tipo === "error"
+          className={`p-3 rounded-lg border text-sm ${tipo === "error"
               ? "bg-red-50 border-red-200 text-red-700"
               : "bg-green-50 border-green-200 text-green-700"
-          }`}
+            }`}
         >
           {msg}
         </div>
@@ -122,6 +143,23 @@ export default function Perfil() {
           <label className="text-sm font-medium">Dirección</label>
           <input className="w-full border rounded-lg p-3" value={form.direccion}
             onChange={(e) => onChange("direccion", e.target.value)} />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Número de Cuenta</label>
+          <input className="w-full border rounded-lg p-3" value={form.numero_cuenta}
+            onChange={(e) => onChange("numero_cuenta", e.target.value)} placeholder="Número de cuenta bancaria" />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium">Banco</label>
+          <select className="w-full border rounded-lg p-3" value={form.banco}
+            onChange={(e) => onChange("banco", e.target.value)}>
+            <option value="">Selecciona tu banco</option>
+            {bancosChile.map(banco => (
+              <option key={banco} value={banco}>{banco}</option>
+            ))}
+          </select>
         </div>
 
         <button className="md:col-span-2 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700">
