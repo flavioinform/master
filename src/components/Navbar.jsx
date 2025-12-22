@@ -30,9 +30,9 @@ function Navbar() {
             <Link to="/mision" className="text-slate-600 font-bold text-sm uppercase tracking-widest hover:text-sky-600 transition-colors">
               Misión
             </Link>
-            {/* <Link to="#contacto" className="text-slate-600 font-bold text-sm uppercase tracking-widest hover:text-sky-600 transition-colors">
-              Contactanos
-            </Link> */}
+            <Link to="/#contacto" className="text-slate-600 font-bold text-sm uppercase tracking-widest hover:text-sky-600 transition-colors">
+              Contáctanos
+            </Link>
           </div>
 
           {/* Auth Button */}

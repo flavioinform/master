@@ -8,7 +8,11 @@ export default function CrearConvocatoria() {
   const [msg, setMsg] = useState("");
 
   const [showModal, setShowModal] = useState(false);
+  const [showClubModal, setShowClubModal] = useState(false);
   const [editing, setEditing] = useState(null);
+
+  const [clubs, setClubs] = useState([]);
+  const [newClub, setNewClub] = useState("");
 
   // Form State
   const [formData, setFormData] = useState({
@@ -32,8 +36,14 @@ export default function CrearConvocatoria() {
     setLoading(false);
   };
 
+  const loadClubs = async () => {
+    const { data } = await supabase.from("clubs").select("*").order("name");
+    setClubs(data || []);
+  };
+
   useEffect(() => {
     loadCompetitions();
+    loadClubs();
   }, []);
 
   const openModal = (comp = null) => {
@@ -59,6 +69,20 @@ export default function CrearConvocatoria() {
       });
     }
     setShowModal(true);
+  };
+
+  const handleSaveClub = async (e) => {
+    e.preventDefault();
+    if (!newClub.trim()) return;
+
+    const { error } = await supabase.from("clubs").insert({ name: newClub.trim() });
+    if (error) {
+      alert("Error creando club: " + error.message);
+    } else {
+      setNewClub("");
+      setShowClubModal(false);
+      loadClubs();
+    }
   };
 
   const handleSave = async (e) => {
@@ -181,8 +205,27 @@ export default function CrearConvocatoria() {
                 <input required className="w-full border rounded p-2" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} />
               </div>
               <div>
-                <label className="block text-sm font-bold text-gray-700">Club Organizador</label>
-                <input required className="w-full border rounded p-2" value={formData.organizer} onChange={e => setFormData({ ...formData, organizer: e.target.value })} />
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-sm font-bold text-gray-700">Club Organizador</label>
+                  <button
+                    type="button"
+                    onClick={() => setShowClubModal(true)}
+                    className="text-xs text-blue-600 hover:underline font-bold"
+                  >
+                    + Gestionar Clubes
+                  </button>
+                </div>
+                <select
+                  required
+                  className="w-full border rounded p-2"
+                  value={formData.organizer}
+                  onChange={e => setFormData({ ...formData, organizer: e.target.value })}
+                >
+                  <option value="">Seleccione un club...</option>
+                  {clubs.map(c => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -210,6 +253,54 @@ export default function CrearConvocatoria() {
                 <button type="submit" className="px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 font-bold">Guardar</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Club Management Modal */}
+      {showClubModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Gestionar Clubes</h2>
+              <button onClick={() => setShowClubModal(false)} className="text-gray-500 text-3xl leading-none">&times;</button>
+            </div>
+
+            <form onSubmit={handleSaveClub} className="flex gap-2 mb-6">
+              <input
+                className="flex-1 border-2 border-slate-100 rounded-xl p-2.5 outline-none focus:border-blue-500 transition-all font-bold"
+                placeholder="Nombre del club..."
+                value={newClub}
+                onChange={e => setNewClub(e.target.value)}
+              />
+              <button type="submit" className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">
+                Añadir
+              </button>
+            </form>
+
+            <div className="max-h-60 overflow-y-auto border border-slate-100 rounded-2xl divide-y divide-slate-50 bg-slate-50/30">
+              {clubs.length === 0 ? (
+                <p className="p-8 text-center text-slate-400 font-bold text-sm uppercase tracking-widest">No hay clubes</p>
+              ) : (
+                clubs.map(c => (
+                  <div key={c.id} className="p-4 flex justify-between items-center hover:bg-white transition-colors">
+                    <span className="font-black text-slate-700 uppercase text-xs tracking-widest">{c.name}</span>
+                    <button
+                      onClick={async () => {
+                        if (confirm(`¿Eliminar club "${c.name}"?`)) {
+                          const { error } = await supabase.from("clubs").delete().eq("id", c.id);
+                          if (error) alert("Error: " + error.message);
+                          else loadClubs();
+                        }
+                      }}
+                      className="text-red-400 hover:text-red-600 font-black text-[10px] uppercase tracking-widest"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       )}

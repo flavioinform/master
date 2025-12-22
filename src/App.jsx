@@ -29,6 +29,7 @@ import CompetitionManager from "@/pages/dashboard/directiva/CompetitionManager";
 import PerfilesAdmin from "@/pages/dashboard/directiva/PerfilesAdmin";
 import DashboardHome from "@/pages/dashboard/DashboardHome";
 import CalendarioCompetencias from "@/pages/dashboard/CalendarioCompetencias";
+import CambioPassword from "@/pages/dashboard/CambioPassword";
 
 function App() {
   return (
@@ -103,6 +104,7 @@ function App() {
             <Route path="vouchers" element={<Vouchers />} />
             <Route path="perfil" element={<Perfil />} />
             <Route path="historial" element={<Historial />} />
+            <Route path="cambio-password" element={<CambioPassword />} />
 
             {/* Convocatorias */}
             <Route path="convocatorias" element={<ConvocatoriasList />} />

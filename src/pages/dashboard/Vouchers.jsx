@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState, useContext } from "react";
 import { supabase } from "@/lib/supabase";
 import { AppContext } from "@/context/AppContext";
+import { sendAdminNotification } from "@/lib/email";
+
+const MESES = [
+  { n: 1, name: "Enero" }, { n: 2, name: "Febrero" }, { n: 3, name: "Marzo" },
+  { n: 4, name: "Abril" }, { n: 5, name: "Mayo" }, { n: 6, name: "Junio" },
+  { n: 7, name: "Julio" }, { n: 8, name: "Agosto" }, { n: 9, name: "Septiembre" },
+  { n: 10, name: "Octubre" }, { n: 11, name: "Noviembre" }, { n: 12, name: "Diciembre" }
+];
 
 export default function Vouchers() {
   const { user } = useContext(AppContext);
@@ -13,6 +21,7 @@ export default function Vouchers() {
 
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(true);
+  // eslint-disable-next-line no-unused-vars
   const [subiendo, setSubiendo] = useState(false);
 
   // Estado para controlar qué cuota se está subiendo actualmente
@@ -21,10 +30,11 @@ export default function Vouchers() {
   const [msg, setMsg] = useState("");
   const [tipo, setTipo] = useState("");
 
-  // Plan de cuotas seleccionado (solo si no hay vouchers previos)
+  // ========== FILTROS CATEGORIA Y MES ==========
+  const [catFiltro, setCatFiltro] = useState("todas"); // todas | mensual | anual
+  const [mesFiltro, setMesFiltro] = useState("todos"); // todos | 1 | 2 ... 12
   const [planCuotas, setPlanCuotas] = useState(1);
 
-  const hoyISO = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   const load = async () => {
     setLoading(true);
@@ -78,6 +88,23 @@ export default function Vouchers() {
     if (user?.id) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
+
+  // ✅ PERIODOS FILTRADOS
+  const periodosFiltrados = useMemo(() => {
+    let list = periodos;
+
+    if (catFiltro === "mensual") {
+      list = list.filter(p => p.concepto?.toLowerCase().includes("mensual") || p.nombre?.toLowerCase().match(/enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre/i));
+      if (mesFiltro !== "todos") {
+        const mesNombre = MESES.find(m => m.n === parseInt(mesFiltro))?.name.toLowerCase();
+        list = list.filter(p => p.nombre?.toLowerCase().includes(mesNombre));
+      }
+    } else if (catFiltro === "anual") {
+      list = list.filter(p => p.concepto?.toLowerCase().includes("anual") || p.nombre?.toLowerCase().includes("anual"));
+    }
+
+    return list;
+  }, [periodos, catFiltro, mesFiltro]);
 
   // Vouchers del periodo seleccionado
   const vouchersActuales = useMemo(() => {
@@ -151,6 +178,19 @@ export default function Vouchers() {
       setFile(null);
       setMsg(`¡Cuota ${nroCuota} subida exitosamente!`);
       setTipo("success");
+
+      // Notificación al Admin
+      try {
+        await sendAdminNotification("template_voucher", {
+          from_name: user.nombre || "Usuario",
+          from_email: user.email || "No disponible",
+          message: `Nuevo comprobante subido para ${periodoSel.concepto} (${periodoSel.nombre}) - Cuota ${nroCuota}.`,
+          type: "Validación de Pago"
+        });
+      } catch (emailErr) {
+        console.warn("No se pudo enviar notificación por email:", emailErr);
+      }
+
       await load(); // Recargar para ver cambios
     } catch (err) {
       console.error(err);
@@ -303,15 +343,48 @@ export default function Vouchers() {
 
         {/* PASO 1: SELECCIÓN */}
         <section>
-          <div className="flex items-center gap-3 mb-4">
-            <div className="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold">1</div>
-            <h2 className="text-2xl font-bold text-gray-800">Selecciona el Pago</h2>
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold">1</div>
+              <h2 className="text-2xl font-bold text-gray-800">Selecciona el Pago</h2>
+            </div>
+
+            <div className="flex flex-wrap gap-2 items-center">
+              {/* Filtros de Categoría */}
+              <div className="flex gap-1 bg-white p-1 rounded-xl border shadow-sm">
+                {["todas", "mensual", "anual"].map(c => (
+                  <button
+                    key={c}
+                    onClick={() => { setCatFiltro(c); setMesFiltro("todos"); }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition ${catFiltro === c ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    {c === "todas" ? "Todos" : c === "mensual" ? "Mensuales" : "Anuales"}
+                  </button>
+                ))}
+              </div>
+
+              {/* Filtro de Mes (solo si es mensual) */}
+              {catFiltro === "mensual" && (
+                <select
+                  className="border rounded-xl px-3 py-1.5 text-xs font-bold bg-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                  value={mesFiltro}
+                  onChange={e => setMesFiltro(e.target.value)}
+                >
+                  <option value="todos">Todos los meses</option>
+                  {MESES.map(m => <option key={m.n} value={m.n}>{m.name}</option>)}
+                </select>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {periodos.length === 0 && <p className="text-gray-500">No hay pagos activos.</p>}
+            {periodosFiltrados.length === 0 && (
+              <div className="col-span-full py-10 text-center bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300">
+                <p className="text-gray-500 font-medium italic">No se encontraron pagos activos en esta categoría.</p>
+              </div>
+            )}
 
-            {periodos.map((p) => {
+            {periodosFiltrados.map((p) => {
               const misVs = misVouchersMap.get(p.id) || [];
               const isSelected = periodoSel?.id === p.id;
 
@@ -330,8 +403,8 @@ export default function Vouchers() {
                     setMsg("");
                   }}
                   className={`text-left p-5 rounded-2xl border-2 transition-all shadow-sm ${isSelected
-                      ? "border-blue-600 bg-blue-50 ring-2 ring-blue-300"
-                      : "border-gray-200 bg-white hover:border-blue-300"
+                    ? "border-blue-600 bg-blue-50 ring-2 ring-blue-300"
+                    : "border-gray-200 bg-white hover:border-blue-300"
                     }`}
                 >
                   <h3 className="text-xl font-bold text-gray-900 mb-1">

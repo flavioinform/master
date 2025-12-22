@@ -15,8 +15,8 @@ export default function CompetitionManager() {
 
     const [showStageModal, setShowStageModal] = useState(false);
     const [showEventModal, setShowEventModal] = useState(false);
+    const [showManualModal, setShowManualModal] = useState(false);
     const [selectedStage, setSelectedStage] = useState(null);
-    const [msg, setMsg] = useState("");
 
     const loadData = async () => {
         setLoading(true);
@@ -48,7 +48,7 @@ export default function CompetitionManager() {
 
             setStages(stagesSorted);
         } catch (err) {
-            setMsg("Error: " + err.message);
+            console.error("Error:", err.message);
         } finally {
             setLoading(false);
         }
@@ -61,7 +61,7 @@ export default function CompetitionManager() {
                 .from("competition_enrollments")
                 .select(`
           id, entry_time, status, created_at,
-          profiles!inner(id, nombre_completo, rut, fecha_nacimiento, telefono),
+          profiles!inner(id, nombre_completo, rut, fecha_nacimiento, telefono, talla),
           competition_events!inner(
             id, event_number,
             event_catalog(name, style, distance, category),
@@ -76,7 +76,7 @@ export default function CompetitionManager() {
             if (error) throw error;
             setEnrollments(data || []);
         } catch (err) {
-            setMsg("Error cargando inscripciones: " + err.message);
+            console.error("Error cargando inscripciones:", err.message);
         } finally {
             setLoadingEnrollments(false);
         }
@@ -98,6 +98,7 @@ export default function CompetitionManager() {
                     rut: enr.profiles.rut,
                     fecha_nacimiento: enr.profiles.fecha_nacimiento,
                     telefono: enr.profiles.telefono,
+                    talla: enr.profiles.talla || "-",
                     events: []
                 });
             }
@@ -113,13 +114,14 @@ export default function CompetitionManager() {
 
         const excelData = [];
 
-        userMap.forEach((userData, userId) => {
+        userMap.forEach((userData) => {
             userData.events.forEach((evt, idx) => {
                 excelData.push({
                     "Nombre": idx === 0 ? userData.nombre : "",
                     "RUT": idx === 0 ? userData.rut : "",
                     "Fecha Nacimiento": idx === 0 ? userData.fecha_nacimiento : "",
                     "Teléfono": idx === 0 ? userData.telefono : "",
+                    "Talla": idx === 0 ? userData.talla : "",
                     "Etapa": evt.stage,
                     "N° Prueba": evt.eventNumber,
                     "Prueba": evt.eventName,
@@ -137,12 +139,14 @@ export default function CompetitionManager() {
 
     useEffect(() => {
         if (id) loadData();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     useEffect(() => {
         if (activeTab === "enrollments" && id) {
             loadEnrollments();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab, id]);
 
     if (loading) return <div className="p-6">Cargando detalles...</div>;
@@ -181,6 +185,12 @@ export default function CompetitionManager() {
                                 className="bg-black text-white px-4 py-2 rounded-lg font-bold hover:bg-gray-800"
                             >
                                 + Agregar Etapa
+                            </button>
+                            <button
+                                onClick={() => setShowManualModal(true)}
+                                className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 shadow flex items-center gap-2"
+                            >
+                                <span>➕</span> Registro Manual (Histórico)
                             </button>
                         </div>
 
@@ -230,6 +240,7 @@ export default function CompetitionManager() {
                                         <tr>
                                             <th className="p-3 text-left">Nadador</th>
                                             <th className="p-3 text-left">RUT</th>
+                                            <th className="p-3 text-center">Talla</th>
                                             <th className="p-3 text-left">Etapa</th>
                                             <th className="p-3 text-left">Prueba</th>
                                             <th className="p-3 text-left">Tiempo</th>
@@ -239,15 +250,16 @@ export default function CompetitionManager() {
                                     <tbody className="divide-y">
                                         {enrollments.map(enr => (
                                             <tr key={enr.id} className="hover:bg-gray-50">
-                                                <td className="p-3">{enr.profiles.nombre_completo}</td>
+                                                <td className="p-3 font-medium">{enr.profiles.nombre_completo}</td>
                                                 <td className="p-3 text-gray-600">{enr.profiles.rut}</td>
+                                                <td className="p-3 text-center font-bold text-blue-600">{enr.profiles.talla || "-"}</td>
                                                 <td className="p-3 text-gray-600">{enr.competition_events.competition_stages.name}</td>
                                                 <td className="p-3">
-                                                    <div className="font-medium">#{enr.competition_events.event_number} - {enr.competition_events.event_catalog.name}</div>
+                                                    <div className="font-medium text-slate-800">#{enr.competition_events.event_number} - {enr.competition_events.event_catalog?.name}</div>
                                                 </td>
-                                                <td className="p-3 font-mono">{enr.entry_time || "Sin tiempo"}</td>
+                                                <td className="p-3 font-mono text-xs">{enr.entry_time || "00:00:00"}</td>
                                                 <td className="p-3 text-center">
-                                                    <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${enr.status === 'confirmed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                                                    <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${enr.status === 'confirmed' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
                                                         }`}>
                                                         {enr.status === 'confirmed' ? 'Confirmado' : 'Pendiente'}
                                                     </span>
@@ -264,6 +276,7 @@ export default function CompetitionManager() {
 
             {showStageModal && <StageModal competitionId={id} onClose={() => setShowStageModal(false)} onReload={loadData} />}
             {showEventModal && selectedStage && <EventModal stage={selectedStage} onClose={() => setShowEventModal(false)} onReload={loadData} />}
+            {showManualModal && <ManualRegistrationModal stages={stages} onClose={() => setShowManualModal(false)} onReload={loadEnrollments} />}
 
         </div>
     );
@@ -271,13 +284,13 @@ export default function CompetitionManager() {
 
 function StageCard({ stage, onAddEvent, onReload }) {
     const handleDelete = async () => {
-        if (!confirm("Eliminar etapa?")) return;
+        if (!confirm("¿Eliminar etapa y todas sus pruebas?")) return;
         await supabase.from("competition_stages").delete().eq("id", stage.id);
         onReload();
     };
 
     const handleDeleteEvent = async (eventId) => {
-        if (!confirm("Eliminar prueba?")) return;
+        if (!confirm("¿Eliminar esta prueba?")) return;
         await supabase.from("competition_events").delete().eq("id", eventId);
         onReload();
     };
@@ -293,14 +306,14 @@ function StageCard({ stage, onAddEvent, onReload }) {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={handleDelete} className="text-red-500 text-xs hover:underline">Eliminar Etapa</button>
+                    <button onClick={handleDelete} className="text-red-500 text-xs font-bold hover:underline">Eliminar Etapa</button>
                 </div>
             </div>
 
             <div className="p-4">
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="text-gray-500 uppercase text-xs border-b">
+                        <tr className="text-gray-500 uppercase text-[10px] font-black tracking-widest border-b">
                             <th className="text-left py-2">#</th>
                             <th className="text-left py-2">Prueba</th>
                             <th className="text-left py-2">Detalles</th>
@@ -309,27 +322,29 @@ function StageCard({ stage, onAddEvent, onReload }) {
                     </thead>
                     <tbody className="divide-y">
                         {stage.competition_events.length === 0 ? (
-                            <tr><td colSpan="4" className="py-4 text-center text-gray-400 italic">Sin pruebas asignadas.</td></tr>
+                            <tr><td colSpan="4" className="py-8 text-center text-gray-400 italic font-medium">Sin pruebas asignadas.</td></tr>
                         ) : (
                             stage.competition_events.map(ev => (
-                                <tr key={ev.id}>
-                                    <td className="py-2 font-bold text-gray-700">{ev.event_number}</td>
-                                    <td className="py-2 font-medium">
+                                <tr key={ev.id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="py-3 font-black text-slate-400">#{ev.event_number}</td>
+                                    <td className="py-3 font-bold text-slate-800">
                                         {ev.event_catalog?.name || "Prueba Desconocida"}
                                     </td>
-                                    <td className="py-2 text-gray-500 text-xs">
-                                        {ev.event_catalog?.distance}m {ev.event_catalog?.style}
+                                    <td className="py-3 text-slate-500 text-xs font-semibold">
+                                        {ev.event_catalog?.distance}m {ev.event_catalog?.style} ({ev.event_catalog?.category?.toUpperCase()})
                                     </td>
-                                    <td className="py-2 text-right">
-                                        <button onClick={() => handleDeleteEvent(ev.id)} className="text-red-500 hover:text-red-700">x</button>
+                                    <td className="py-3 text-right">
+                                        <button onClick={() => handleDeleteEvent(ev.id)} className="text-red-400 hover:text-red-600 font-bold transition-colors">Eliminar</button>
                                     </td>
                                 </tr>
                             ))
                         )}
                     </tbody>
                 </table>
-                <div className="mt-4 pt-2 border-t text-center">
-                    <button onClick={onAddEvent} className="text-blue-600 font-bold hover:underline text-sm">+ Agregar Prueba a esta Etapa</button>
+                <div className="mt-4 pt-4 border-t text-center">
+                    <button onClick={onAddEvent} className="text-blue-600 font-black uppercase text-[10px] tracking-widest hover:underline transition-all">
+                        + Agregar Prueba a esta Etapa
+                    </button>
                 </div>
             </div>
         </div>
@@ -348,20 +363,20 @@ function StageModal({ competitionId, onClose, onReload }) {
     return (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-                <h3 className="font-bold mb-4">Nueva Etapa</h3>
-                <form onSubmit={handleSubmit} className="space-y-3">
-                    <input required className="w-full border rounded p-2" placeholder="Nombre (Ej: Etapa 1)" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-                    <input required type="date" className="w-full border rounded p-2" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
-                    <select className="w-full border rounded p-2" value={form.pool_type} onChange={e => setForm({ ...form, pool_type: e.target.value })}>
+                <h3 className="font-bold mb-4 uppercase tracking-tight text-slate-900">Nueva Etapa</h3>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    <input required className="w-full border rounded-lg p-2.5 outline-none focus:border-blue-500 font-bold" placeholder="Nombre (Ej: Etapa 1)" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+                    <input required type="date" className="w-full border rounded-lg p-2.5 outline-none focus:border-blue-500 font-bold" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+                    <select className="w-full border rounded-lg p-2.5 font-bold" value={form.pool_type} onChange={e => setForm({ ...form, pool_type: e.target.value })}>
                         <option value="olimpica">Olímpica (50m)</option>
                         <option value="corta">Corta (25m)</option>
                         <option value="abierta">Aguas Abiertas</option>
                     </select>
-                    <input required className="w-full border rounded p-2" placeholder="Ubicación" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} />
-                    <input type="time" className="w-full border rounded p-2" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} />
-                    <div className="flex justify-end gap-2 pt-2">
-                        <button type="button" onClick={onClose} className="bg-gray-200 px-3 py-1 rounded">Cancelar</button>
-                        <button className="bg-black text-white px-3 py-1 rounded">Crear</button>
+                    <input required className="w-full border rounded-lg p-2.5 outline-none focus:border-blue-500 font-bold" placeholder="Ubicación" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} />
+                    <input type="time" className="w-full border rounded-lg p-2.5 font-bold" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} />
+                    <div className="flex justify-end gap-2 pt-4">
+                        <button type="button" onClick={onClose} className="bg-slate-100 px-6 py-2 rounded-lg font-bold">Cancelar</button>
+                        <button className="bg-blue-600 text-white px-6 py-2 rounded-lg font-bold">Crear Etapa</button>
                     </div>
                 </form>
             </div>
@@ -372,8 +387,6 @@ function StageModal({ competitionId, onClose, onReload }) {
 function EventModal({ stage, onClose, onReload }) {
     const [catalog, setCatalog] = useState([]);
     const [search, setSearch] = useState("");
-    const [loading, setLoading] = useState(false);
-
     const [isCreating, setIsCreating] = useState(false);
     const [newEvt, setNewEvt] = useState({ distance: 50, style: "libre", category: "mixto", is_relay: false });
 
@@ -385,7 +398,10 @@ function EventModal({ stage, onClose, onReload }) {
         fetchCatalog();
     }, []);
 
-    const filtered = catalog.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
+    const filtered = catalog.filter(c =>
+        (c.name?.toLowerCase().includes(search.toLowerCase())) ||
+        (c.style?.toLowerCase().includes(search.toLowerCase()))
+    );
 
     const addEvent = async (catalogId) => {
         const currentCount = stage.competition_events?.length || 0;
@@ -398,15 +414,15 @@ function EventModal({ stage, onClose, onReload }) {
         });
 
         if (error) alert(error.message);
-        else {
-            onReload();
-        }
+        else onReload();
     };
 
     const createAndAdd = async () => {
-        const { data, error } = await supabase.from("event_catalog").insert(newEvt).select().single();
+        const { data, error } = await supabase.from("event_catalog").insert({
+            ...newEvt,
+            name: `${newEvt.distance}m ${newEvt.style}`
+        }).select().single();
         if (error) { alert(error.message); return; }
-
         await addEvent(data.id);
         setIsCreating(false);
     };
@@ -415,14 +431,14 @@ function EventModal({ stage, onClose, onReload }) {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl h-[80vh] flex flex-col">
                 <div className="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
-                    <h3 className="font-bold">Agregar Pruebas a {stage.name}</h3>
-                    <button onClick={onClose} className="text-gray-500 font-bold text-xl">&times;</button>
+                    <h3 className="font-bold text-slate-900">Agregar Pruebas a {stage.name}</h3>
+                    <button onClick={onClose} className="text-gray-500 font-bold text-2xl">&times;</button>
                 </div>
 
                 <div className="p-4 border-b bg-white">
                     <div className="flex gap-2">
-                        <input className="flex-1 border rounded p-2" placeholder="Buscar prueba (ej: 50m libre)..." value={search} onChange={e => setSearch(e.target.value)} />
-                        <button onClick={() => setIsCreating(!isCreating)} className="bg-blue-600 text-white px-3 rounded text-sm font-bold">
+                        <input className="flex-1 border rounded-lg p-2.5 outline-none focus:border-blue-500 font-bold" placeholder="Buscar prueba (ej: 50m libre)..." value={search} onChange={e => setSearch(e.target.value)} />
+                        <button onClick={() => setIsCreating(!isCreating)} className="bg-blue-600 text-white px-4 rounded-lg text-sm font-bold">
                             {isCreating ? "Volver a Lista" : "Crear Nueva"}
                         </button>
                     </div>
@@ -430,34 +446,203 @@ function EventModal({ stage, onClose, onReload }) {
 
                 <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
                     {isCreating ? (
-                        <div className="bg-white p-4 rounded shadow border space-y-3">
-                            <h4 className="font-bold text-gray-700">Crear Nueva Prueba (Catálogo)</h4>
-                            <div className="grid grid-cols-2 gap-3">
-                                <select className="border rounded p-2" value={newEvt.distance} onChange={e => setNewEvt({ ...newEvt, distance: Number(e.target.value) })}>
-                                    {[25, 50, 100, 200, 400, 800, 1500].map(d => <option key={d} value={d}>{d}m</option>)}
-                                </select>
-                                <select className="border rounded p-2" value={newEvt.style} onChange={e => setNewEvt({ ...newEvt, style: e.target.value })}>
-                                    {['libre', 'pecho', 'espalda', 'mariposa', 'combinado', 'relevo'].map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
-                                </select>
-                                <select className="border rounded p-2" value={newEvt.category} onChange={e => setNewEvt({ ...newEvt, category: e.target.value })}>
-                                    {['damas', 'varones', 'mixto', 'todo_competidor'].map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                        <div className="bg-white p-6 rounded-xl shadow-sm border space-y-4">
+                            <h4 className="font-bold text-slate-800">Crear Nueva Prueba en Catálogo</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Distancia</label>
+                                    <select className="w-full border rounded-lg p-2.5 font-bold" value={newEvt.distance} onChange={e => setNewEvt({ ...newEvt, distance: Number(e.target.value) })}>
+                                        {[25, 50, 100, 200, 400, 800, 1500].map(d => <option key={d} value={d}>{d}m</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Estilo</label>
+                                    <select className="w-full border rounded-lg p-2.5 font-bold" value={newEvt.style} onChange={e => setNewEvt({ ...newEvt, style: e.target.value })}>
+                                        {['libre', 'pecho', 'espalda', 'mariposa', 'combinado', 'relevo'].map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Categoría</label>
+                                <select className="w-full border rounded-lg p-2.5 font-bold" value={newEvt.category} onChange={e => setNewEvt({ ...newEvt, category: e.target.value })}>
+                                    {['damas', 'varones', 'mixto', 'todo_competidor'].map(c => <option key={c} value={c}>{c.toUpperCase().replace('_', ' ')}</option>)}
                                 </select>
                             </div>
-                            <button onClick={createAndAdd} className="w-full bg-green-600 text-white font-bold py-2 rounded">Guardar y Agregar</button>
+                            <button onClick={createAndAdd} className="w-full bg-blue-600 text-white font-black py-3 rounded-lg uppercase tracking-tight shadow-lg shadow-blue-100">Guardar y Agregar a Etapa</button>
                         </div>
                     ) : (
-                        <div className="space-y-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {filtered.map(item => (
-                                <div key={item.id} className="bg-white p-3 rounded border flex justify-between items-center hover:shadow-sm">
+                                <div key={item.id} className="bg-white p-4 rounded-xl border flex justify-between items-center hover:shadow-md transition-shadow">
                                     <div>
-                                        <p className="font-bold text-gray-800">{item.name}</p>
-                                        <p className="text-xs text-gray-500">ID: {item.id.slice(0, 6)}</p>
+                                        <p className="font-bold text-slate-900">{item.name}</p>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.category}</p>
                                     </div>
-                                    <button onClick={() => addEvent(item.id)} className="bg-gray-100 text-blue-600 px-3 py-1 rounded hover:bg-blue-50 font-bold text-sm">Agregar +</button>
+                                    <button onClick={() => addEvent(item.id)} className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Agregar</button>
                                 </div>
                             ))}
                         </div>
                     )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function ManualRegistrationModal({ stages, onClose, onReload }) {
+    const [search, setSearch] = useState("");
+    const [users, setUsers] = useState([]);
+    const [selectedUser, setSelectedUser] = useState(null);
+    const [stageId, setStageId] = useState("");
+    const [eventId, setEventId] = useState("");
+    const [time, setTime] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const handleSearch = async () => {
+        if (search.length < 3) return;
+        setLoading(true);
+        const { data } = await supabase
+            .from("profiles")
+            .select("id, nombre_completo, rut")
+            .or(`nombre_completo.ilike.%${search}%,rut.ilike.%${search}%`)
+            .limit(10);
+        setUsers(data || []);
+        setLoading(false);
+    };
+
+    const selectedStage = stages.find(s => s.id === stageId);
+    const events = selectedStage ? selectedStage.competition_events : [];
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!selectedUser || !eventId) return;
+
+        const { error } = await supabase.from("competition_enrollments").insert({
+            user_id: selectedUser.id,
+            event_id: eventId,
+            entry_time: time || "00:00:00",
+            status: "confirmed"
+        });
+
+        if (error) {
+            if (error.code === "23505") {
+                alert("Este socio ya se encuentra inscrito en esta prueba.");
+            } else {
+                alert(error.message);
+            }
+        } else {
+            alert("Inscripción manual exitosa");
+            onReload();
+            onClose();
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 flex flex-col max-h-[90vh]">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-bold text-2xl text-slate-900 tracking-tight">Registro Manual Histórico</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-slate-900 text-3xl font-light">&times;</button>
+                </div>
+
+                <div className="space-y-6 overflow-y-auto pr-2 custom-scrollbar">
+                    {/* Buscador de Socio */}
+                    <div className="space-y-2">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Buscar Socio (Nombre o RUT)</label>
+                        <div className="flex gap-2">
+                            <input
+                                className="flex-1 border-2 border-slate-100 rounded-xl p-3 text-sm font-bold focus:border-blue-500 outline-none transition-all"
+                                placeholder="Escribe al menos 3 caracteres..."
+                                value={search}
+                                onChange={e => setSearch(e.target.value)}
+                            />
+                            <button onClick={handleSearch} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-black transition-all">
+                                {loading ? "..." : "Buscar"}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Lista de Resultados */}
+                    {users.length > 0 && !selectedUser && (
+                        <div className="border-2 border-slate-50 rounded-xl divide-y divide-slate-50 text-sm max-h-40 overflow-y-auto bg-slate-50/50">
+                            {users.map(u => (
+                                <button
+                                    key={u.id}
+                                    onClick={() => setSelectedUser(u)}
+                                    className="w-full p-4 text-left hover:bg-white flex justify-between items-center group transition-all"
+                                >
+                                    <div>
+                                        <p className="font-bold text-slate-800">{u.nombre_completo}</p>
+                                        <p className="text-xs text-slate-400 font-medium">{u.rut}</p>
+                                    </div>
+                                    <span className="text-blue-500 font-bold text-[10px] uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-all">Seleccionar</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Socio Seleccionado */}
+                    {selectedUser && (
+                        <div className="bg-blue-50 border-2 border-blue-100/50 p-4 rounded-2xl flex justify-between items-center animate-in fade-in zoom-in duration-300">
+                            <div>
+                                <p className="text-[10px] text-blue-500 font-black uppercase tracking-widest mb-1">Socio Seleccionado</p>
+                                <p className="font-black text-blue-900 text-lg">{selectedUser.nombre_completo}</p>
+                            </div>
+                            <button onClick={() => setSelectedUser(null)} className="bg-white text-blue-600 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest shadow-sm border border-blue-100">Cambiar</button>
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+                        <div className="space-y-2">
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">1. Seleccionar Etapa</label>
+                            <select
+                                required
+                                className="w-full border-2 border-slate-100 rounded-xl p-3.5 text-sm font-bold outline-none focus:border-blue-500 transition-all appearance-none bg-white"
+                                value={stageId}
+                                onChange={e => { setStageId(e.target.value); setEventId(""); }}
+                            >
+                                <option value="">Seleccione etapa...</option>
+                                {stages.map(s => <option key={s.id} value={s.id}>{s.name} ({new Date(s.date).toLocaleDateString()})</option>)}
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">2. Seleccionar Prueba</label>
+                            <select
+                                required
+                                className="w-full border-2 border-slate-100 rounded-xl p-3.5 text-sm font-bold outline-none focus:border-blue-500 transition-all appearance-none bg-white disabled:opacity-50"
+                                value={eventId}
+                                onChange={e => setEventId(e.target.value)}
+                                disabled={!stageId}
+                            >
+                                <option value="">Seleccione prueba...</option>
+                                {events.map(ev => (
+                                    <option key={ev.id} value={ev.id}>#{ev.event_number} - {ev.event_catalog?.name} ({ev.event_catalog?.distance}m {ev.event_catalog?.style})</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">3. Tiempo de Entrada (Opcional)</label>
+                            <input
+                                className="w-full border-2 border-slate-100 rounded-xl p-3.5 text-sm font-mono font-bold focus:border-blue-500 outline-none transition-all"
+                                placeholder="00:00:00"
+                                value={time}
+                                onChange={e => setTime(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="flex gap-3 pt-6">
+                            <button type="button" onClick={onClose} className="flex-1 bg-slate-100 text-slate-600 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all">Cancelar</button>
+                            <button
+                                type="submit"
+                                disabled={!selectedUser || !eventId}
+                                className="flex-[2] bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-blue-100 hover:bg-blue-700 disabled:opacity-50 disabled:shadow-none transition-all"
+                            >
+                                Finalizar Registro
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

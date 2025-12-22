@@ -55,6 +55,7 @@ export default function Dashboard() {
     { title: "Calendario", url: "/dashboard/calendario", icon: Calendar },
     { title: "Mi Perfil", url: "/dashboard/perfil", icon: User },
     { title: "Historial", url: "/dashboard/historial", icon: Clock },
+    { title: "Cambio Contraseña", url: "/dashboard/cambio-password", icon: Shield },
   ];
 
   const menuDirectivaExtra = [
@@ -69,12 +70,12 @@ export default function Dashboard() {
   const isActive = (url) => location.pathname === url;
 
   return (
-    <div className="flex min-h-screen bg-white">
-      {/* Sidebar - Olympic Style */}
-      <aside className="w-72 bg-gradient-to-b from-slate-900 to-slate-950 text-white flex flex-col relative overflow-hidden">
-        {/* Decorative Olympic Rings Pattern */}
-        <div className="absolute top-0 right-0 w-64 h-64 opacity-5">
-          <svg viewBox="0 0 200 200" className="w-full h-full">
+    <div className="flex min-h-screen bg-slate-50">
+      {/* Sidebar - Professional Light Celeste Theme */}
+      <aside className="w-72 bg-gradient-to-b from-blue-50/80 to-white text-slate-600 flex flex-col relative overflow-hidden shadow-sm border-r border-blue-100/50">
+        {/* Decorative Light Pattern */}
+        <div className="absolute top-0 right-0 w-64 h-64 opacity-10 pointer-events-none">
+          <svg viewBox="0 0 200 200" className="w-full h-full text-blue-200">
             <circle cx="40" cy="40" r="30" fill="none" stroke="currentColor" strokeWidth="6" />
             <circle cx="110" cy="40" r="30" fill="none" stroke="currentColor" strokeWidth="6" />
             <circle cx="75" cy="75" r="30" fill="none" stroke="currentColor" strokeWidth="6" />
@@ -82,39 +83,39 @@ export default function Dashboard() {
         </div>
 
         {/* Header */}
-        <div className="p-6 border-b border-white/10 relative z-10">
+        <div className="p-6 border-b border-blue-100/50 relative z-10">
           <div className="flex items-center gap-3 mb-4">
             <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-cyan-400 rounded-xl blur-md opacity-50"></div>
-              <div className="relative bg-gradient-to-br from-blue-500 to-cyan-400 p-2.5 rounded-xl">
+              <div className="absolute inset-0 bg-cyan-400 rounded-xl blur-lg opacity-20"></div>
+              <div className="relative bg-gradient-to-br from-cyan-400 to-blue-500 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
                 <Waves className="h-7 w-7 text-white" />
               </div>
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight uppercase">Club Master</h1>
-              <p className="text-[10px] text-cyan-400 font-bold uppercase tracking-widest">Swimming Excellence</p>
+              <h1 className="text-xl font-black tracking-tight uppercase text-slate-800">Club Master</h1>
+              <p className="text-[10px] text-cyan-600 font-bold uppercase tracking-widest leading-none">Swimming Excellence</p>
             </div>
           </div>
         </div>
 
         {/* User Profile */}
-        <div className="px-6 py-5 border-b border-white/10 relative z-10">
+        <div className="px-6 py-5 border-b border-blue-100/50 relative z-10 bg-white/40 backdrop-blur-sm">
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full blur-sm"></div>
-              <div className="relative h-12 w-12 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-lg font-black shadow-lg">
+              <div className="absolute inset-0 bg-cyan-400 rounded-full blur-md opacity-20"></div>
+              <div className="relative h-12 w-12 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center text-lg font-black text-white shadow-lg shadow-blue-500/10">
                 {nombreCompleto ? nombreCompleto.charAt(0).toUpperCase() : "U"}
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold mb-0.5">Atleta</p>
-              <p className="text-sm font-bold truncate text-white">{nombreCompleto || user?.email?.split('@')[0] || "Usuario"}</p>
+              <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mb-0.5">Atleta</p>
+              <p className="text-sm font-bold truncate text-slate-800">{nombreCompleto || user?.email?.split('@')[0] || "Usuario"}</p>
             </div>
           </div>
           {isDirectiva && (
-            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-[10px] font-black uppercase tracking-wider">
-              <Shield className="h-3 w-3" />
-              Admin
+            <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500 text-white text-[9px] font-black uppercase tracking-wider shadow-md shadow-cyan-500/20">
+              <Shield className="h-2.5 w-2.5" />
+              Directiva
             </div>
           )}
         </div>
@@ -128,15 +129,17 @@ export default function Dashboard() {
                 <Link
                   key={item.title}
                   to={item.url}
-                  className={`group flex items-center gap-3 px-4 py-3.5 rounded-lg transition-all duration-200 ${active
-                    ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg shadow-cyan-500/50'
-                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
+                  className={`group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${active
+                    ? 'bg-white text-blue-600 shadow-md shadow-blue-500/5 border border-blue-50'
+                    : 'text-slate-500 hover:bg-white/60 hover:text-slate-900'
                     }`}
                 >
-                  <item.icon className={`h-5 w-5 ${active ? 'text-white' : 'text-slate-400 group-hover:text-cyan-400'} transition-colors`} />
-                  <span className="text-sm font-bold">{item.title}</span>
+                  <div className={`p-1.5 rounded-lg transition-colors ${active ? 'bg-blue-50 text-blue-600' : 'bg-transparent text-slate-400 group-hover:text-cyan-500'}`}>
+                    <item.icon className="h-5 w-5" />
+                  </div>
+                  <span className={`text-sm ${active ? 'font-black' : 'font-semibold'}`}>{item.title}</span>
                   {active && (
-                    <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white animate-pulse"></div>
+                    <div className="ml-auto w-1 h-4 rounded-full bg-blue-500 shadow-lg shadow-blue-500/50"></div>
                   )}
                 </Link>
               );
@@ -145,10 +148,10 @@ export default function Dashboard() {
         </nav>
 
         {/* Logout */}
-        <div className="p-4 border-t border-white/10 relative z-10">
+        <div className="p-4 border-t border-blue-100/50 relative z-10">
           <button
             onClick={logout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-red-600/90 hover:bg-red-600 transition-all duration-200 text-sm font-bold shadow-lg"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-slate-900 text-white hover:bg-slate-800 transition-all duration-300 text-sm font-bold shadow-xl shadow-slate-900/10"
           >
             <LogOut className="h-4 w-4" />
             Cerrar Sesión

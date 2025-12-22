@@ -14,6 +14,10 @@ export default function PerfilesAdmin() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newUserData, setNewUserData] = useState({ rut: "", nombre: "", email: "" });
   const [processing, setProcessing] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [userToReset, setUserToReset] = useState(null);
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -123,6 +127,32 @@ export default function PerfilesAdmin() {
       setTipo("error");
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!userToReset || !resetPassword) return;
+
+    setResetting(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ password: resetPassword })
+        .eq("id", userToReset.id);
+
+      if (error) throw error;
+
+      setMsg(`Contraseña de ${userToReset.nombre_completo || userToReset.rut} restablacida ✅`);
+      setTipo("success");
+      setShowResetModal(false);
+      setResetPassword("");
+      setUserToReset(null);
+    } catch (err) {
+      setMsg(err.message || "Error al restablecer contraseña");
+      setTipo("error");
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -249,6 +279,16 @@ export default function PerfilesAdmin() {
                     >
                       {u.rol === "directiva" ? "Quitar Admin" : "Hacer Admin"}
                     </button>
+
+                    <button
+                      onClick={() => {
+                        setUserToReset(u);
+                        setShowResetModal(true);
+                      }}
+                      className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold"
+                    >
+                      Reset Pass
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -329,6 +369,69 @@ export default function PerfilesAdmin() {
                   className="flex-1 py-3 bg-sky-600 text-white font-black rounded-xl hover:bg-sky-700 transition-all shadow-xl shadow-sky-100 uppercase tracking-widest text-xs disabled:opacity-50"
                 >
                   {processing ? "Creando..." : "Crear Usuario"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Modal - Reset Password */}
+      {showResetModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 space-y-6 border border-amber-50 animate-in fade-in zoom-in duration-300">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Reiniciar Contraseña</h3>
+              <button
+                onClick={() => {
+                  setShowResetModal(false);
+                  setUserToReset(null);
+                  setResetPassword("");
+                }}
+                className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
+              <p className="text-sm text-amber-900 leading-tight">
+                Estás a punto de cambiar la contraseña de:
+                <br />
+                <span className="font-black uppercase">{userToReset?.nombre_completo || userToReset?.rut}</span>
+              </p>
+            </div>
+
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nueva Contraseña</label>
+                <input
+                  type="text"
+                  placeholder="Ingresa la nueva contraseña"
+                  value={resetPassword}
+                  onChange={(e) => setResetPassword(e.target.value)}
+                  className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-amber-500 focus:bg-white rounded-xl outline-none transition-all font-bold"
+                  required
+                />
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowResetModal(false);
+                    setUserToReset(null);
+                    setResetPassword("");
+                  }}
+                  className="flex-1 py-3 bg-slate-100 text-slate-600 font-black rounded-xl hover:bg-slate-200 transition-all uppercase tracking-widest text-xs"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={resetting}
+                  className="flex-1 py-3 bg-amber-500 text-white font-black rounded-xl hover:bg-amber-600 transition-all shadow-xl shadow-amber-100 uppercase tracking-widest text-xs disabled:opacity-50"
+                >
+                  {resetting ? "Cambiando..." : "Confirmar Cambio"}
                 </button>
               </div>
             </form>
