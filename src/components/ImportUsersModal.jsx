@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 export default function ImportUsersModal({ onClose, onReload }) {
     const [mode, setMode] = useState("socios"); // 'socios' | 'pagos'
     const [year, setYear] = useState(new Date().getFullYear()); // For payments
+    const [month, setMonth] = useState(new Date().getMonth() + 1); // For payments (1-12)
 
     const [loading, setLoading] = useState(false);
     const [msg, setMsg] = useState("");
@@ -134,7 +135,9 @@ export default function ImportUsersModal({ onClose, onReload }) {
                     estado: 'aprobado',
                     archivo_path: "SIN_COMPROBANTE",
                     comentario: `Importado ${new Date().toLocaleDateString()}`,
-                    created_at: `${year}-01-01T12:00:00+00:00`
+                    created_at: `${year}-${String(month).padStart(2, '0')}-01T12:00:00+00:00`,
+                    mes: month,
+                    anio: year
                 });
             } else {
                 if (!userId) setLogs(prev => [...prev, `RUT NO ENCONTRADO: ${rawRut}`]);
@@ -210,17 +213,40 @@ export default function ImportUsersModal({ onClose, onReload }) {
                                     Las columnas deben ser: <span className="text-blue-600">RUT, Pago</span>
                                 </p>
                             </div>
-                            <div className="flex items-center gap-6 bg-white border border-blue-100 p-5 rounded-2xl shadow-sm">
-                                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Año Destino:</span>
-                                <select
-                                    className="border-none bg-slate-50 rounded-lg px-4 py-2 text-xl font-black text-blue-600 w-32 outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none text-center"
-                                    value={year}
-                                    onChange={e => setYear(Number(e.target.value))}
-                                >
-                                    {Array.from({ length: 33 }, (_, i) => 2008 + i).map(y => (
-                                        <option key={y} value={y}>{y}</option>
-                                    ))}
-                                </select>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="flex flex-col gap-2 bg-white border border-blue-100 p-5 rounded-2xl shadow-sm">
+                                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Año:</span>
+                                    <select
+                                        className="border-none bg-slate-50 rounded-lg px-4 py-2 text-xl font-black text-blue-600 outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none text-center"
+                                        value={year}
+                                        onChange={e => setYear(Number(e.target.value))}
+                                    >
+                                        {Array.from({ length: 33 }, (_, i) => 2008 + i).map(y => (
+                                            <option key={y} value={y}>{y}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="flex flex-col gap-2 bg-white border border-emerald-100 p-5 rounded-2xl shadow-sm">
+                                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Mes:</span>
+                                    <select
+                                        className="border-none bg-slate-50 rounded-lg px-4 py-2 text-xl font-black text-emerald-600 outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none text-center"
+                                        value={month}
+                                        onChange={e => setMonth(Number(e.target.value))}
+                                    >
+                                        <option value={1}>Enero</option>
+                                        <option value={2}>Febrero</option>
+                                        <option value={3}>Marzo</option>
+                                        <option value={4}>Abril</option>
+                                        <option value={5}>Mayo</option>
+                                        <option value={6}>Junio</option>
+                                        <option value={7}>Julio</option>
+                                        <option value={8}>Agosto</option>
+                                        <option value={9}>Septiembre</option>
+                                        <option value={10}>Octubre</option>
+                                        <option value={11}>Noviembre</option>
+                                        <option value={12}>Diciembre</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     )}

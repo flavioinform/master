@@ -200,6 +200,25 @@ export default function VouchersAdmin() {
       return;
     }
 
+    // Pedir mes
+    const mesTexto = prompt(
+      "¿De qué mes es este Excel histórico?\n\n" +
+      "1 = Enero, 2 = Febrero, 3 = Marzo, 4 = Abril\n" +
+      "5 = Mayo, 6 = Junio, 7 = Julio, 8 = Agosto\n" +
+      "9 = Septiembre, 10 = Octubre, 11 = Noviembre, 12 = Diciembre",
+      new Date().getMonth() + 1
+    );
+
+    const mes = parseInt(mesTexto);
+    if (!mes || mes < 1 || mes > 12) {
+      alert("Mes inválido. Debe ser un número entre 1 y 12");
+      e.target.value = '';
+      return;
+    }
+
+    const mesesNombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
     // Pedir nombre del periodo (sugerir nombre del archivo)
     const nombrePeriodo = prompt(
       "¿Cómo se llama el periodo?\n(Presiona Enter para usar el nombre del archivo)",
@@ -212,7 +231,7 @@ export default function VouchersAdmin() {
     }
 
     const confirmImport = window.confirm(
-      `¿Confirmas importar este Excel?\n\nPeriodo: ${nombrePeriodo}\nAño: ${anio}`
+      `¿Confirmas importar este Excel?\n\nPeriodo: ${nombrePeriodo}\nAño: ${anio}\nMes: ${mesesNombres[mes - 1]}`
     );
 
     if (!confirmImport) {
@@ -322,7 +341,7 @@ export default function VouchersAdmin() {
               period_id: periodo.id,
               monto_individual: monto,
               estado: "aprobado",
-              mes: null,
+              mes: mes,
               anio: parseInt(anio),
               cuota_numero: null,
               archivo_path: "excel-import/historico",
@@ -1798,7 +1817,10 @@ function VoucherCard({ v, onView, onReview, onDownload, onDelete, onEdit }) {
   const [comentario, setComentario] = useState(v.comentario || "");
 
   return (
-    <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-sm space-y-6 animate-in fade-in duration-500 hover:shadow-md transition-all group">
+    <div className={`border p-6 rounded-[2rem] shadow-sm space-y-6 animate-in fade-in duration-500 hover:shadow-md transition-all group ${v.estado === 'aprobado'
+      ? 'bg-emerald-50 border-emerald-200'
+      : 'bg-white border-slate-200'
+      }`}>
       <div className="flex flex-col xl:flex-row justify-between items-start gap-6">
         {/* Info Socio */}
         <div className="flex items-center gap-4">

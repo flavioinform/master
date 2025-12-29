@@ -1,6 +1,7 @@
 import { useEffect, useState, useContext } from "react";
 import { supabase } from "@/lib/supabase";
 import { AppContext } from "@/context/AppContext";
+import { formatRut } from "@/lib/rutUtils";
 
 export default function Perfil() {
   const { user } = useContext(AppContext);
@@ -53,6 +54,7 @@ export default function Perfil() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [searchRut, setSearchRut] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [editingOtherUser, setEditingOtherUser] = useState(false);
 
@@ -104,18 +106,35 @@ export default function Perfil() {
   };
 
   const searchUsers = async (rut) => {
-    if (!rut || rut.length < 2) {
+    if (!rut || rut.length < 1) {
       setSearchResults([]);
       return;
     }
 
-    const { data } = await supabase
-      .from("profiles")
-      .select("id, nombre_completo, rut, email")
-      .ilike("rut", `%${rut}%`)
-      .limit(10);
+    // Limpiar el RUT de puntos y guiones para la búsqueda
+    const cleanedRut = rut.replace(/\./g, '').replace(/-/g, '');
 
-    setSearchResults(data || []);
+    console.log('🔍 Buscando:', { original: rut, cleaned: cleanedRut });
+
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id, nombre_completo, rut, email")
+        .or(`rut.ilike.%${rut}%,rut.ilike.%${cleanedRut}%,nombre_completo.ilike.%${rut}%`)
+        .limit(10);
+
+      if (error) {
+        console.error('❌ Error en búsqueda:', error);
+        setSearchResults([]);
+        return;
+      }
+
+      console.log('📊 Resultados encontrados:', data?.length || 0, data);
+      setSearchResults(data || []);
+    } catch (err) {
+      console.error('❌ Error inesperado:', err);
+      setSearchResults([]);
+    }
   };
 
   const selectUser = (userId) => {
@@ -158,13 +177,18 @@ export default function Perfil() {
 
     const targetId = selectedUserId || user.id;
 
+    // Limpiar datos: convertir strings vacíos a null para campos de fecha
+    const cleanedForm = {
+      ...form,
+      fecha_nacimiento: form.fecha_nacimiento || null,
+      fecha_ingreso: form.fecha_ingreso || null,
+      perfil_completo: true,
+      updated_at: new Date().toISOString(),
+    };
+
     const { error } = await supabase
       .from("profiles")
-      .update({
-        ...form,
-        perfil_completo: true,
-        updated_at: new Date().toISOString(),
-      })
+      .update(cleanedForm)
       .eq("id", targetId);
 
     if (error) {
@@ -204,24 +228,34 @@ export default function Perfil() {
               type="text"
               placeholder="Ingresa el RUT para buscar..."
               value={searchRut}
-              onChange={(e) => setSearchRut(e.target.value)}
+              onChange={(e) => setSearchRut(formatRut(e.target.value))}
               className="w-full border border-cyan-300 rounded-xl p-3 focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 outline-none transition-all font-semibold bg-white"
+              maxLength={12}
             />
 
             {/* Search Results Dropdown */}
-            {searchResults.length > 0 && (
+            {searchRut && searchRut.length >= 1 && (
               <div className="absolute z-10 w-full mt-2 bg-white border border-cyan-200 rounded-xl shadow-xl max-h-60 overflow-y-auto">
-                {searchResults.map((result) => (
-                  <button
-                    key={result.id}
-                    type="button"
-                    onClick={() => selectUser(result.id)}
-                    className="w-full text-left px-4 py-3 hover:bg-cyan-50 transition-colors border-b border-slate-100 last:border-b-0"
-                  >
-                    <div className="font-bold text-slate-900">{result.nombre_completo || "Sin nombre"}</div>
-                    <div className="text-sm text-slate-600">RUT: {result.rut}</div>
-                  </button>
-                ))}
+                {(() => {
+                  console.log('🎨 Renderizando dropdown, resultados:', searchResults.length, searchResults);
+                  return searchResults.length > 0 ? (
+                    searchResults.map((result) => (
+                      <button
+                        key={result.id}
+                        type="button"
+                        onClick={() => selectUser(result.id)}
+                        className="w-full text-left px-4 py-3 hover:bg-cyan-50 transition-colors border-b border-slate-100 last:border-b-0"
+                      >
+                        <div className="font-bold text-slate-900">{result.nombre_completo || "Sin nombre"}</div>
+                        <div className="text-sm text-slate-600">RUT: {result.rut}</div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-slate-500 text-center">
+                      Buscando...
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -280,8 +314,9 @@ export default function Perfil() {
               <input
                 className="w-full border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                 value={form.rut}
-                onChange={(e) => onChange("rut", e.target.value)}
+                onChange={(e) => onChange("rut", formatRut(e.target.value))}
                 placeholder="12.345.678-9"
+                maxLength={12}
               />
             </div>
 
@@ -292,15 +327,20 @@ export default function Perfil() {
                 className="w-full border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                 value={form.fecha_nacimiento}
                 onChange={(e) => onChange("fecha_nacimiento", e.target.value)}
+                min="1920-01-01"
+                max="2020-12-31"
               />
             </div>
 
             <div>
               <label className="text-sm font-semibold text-slate-600 mb-1.5 block">Teléfono</label>
               <input
+                type="tel"
                 className="w-full border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                 value={form.telefono}
-                onChange={(e) => onChange("telefono", e.target.value)}
+                onChange={(e) => onChange("telefono", e.target.value.replace(/[^0-9+]/g, ''))}
+                maxLength={15}
+                placeholder="+56912345678"
               />
             </div>
 
@@ -351,6 +391,8 @@ export default function Perfil() {
                 className="w-full border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                 value={form.fecha_ingreso}
                 onChange={(e) => onChange("fecha_ingreso", e.target.value)}
+                min="2008-08-23"
+                max={new Date().toISOString().split('T')[0]}
               />
             </div>
           </div>

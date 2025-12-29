@@ -1,8 +1,6 @@
-ï»¿import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext } from "react";
 import { supabase } from "@/lib/supabase";
 import { AppContext } from "@/context/AppContext";
-import { formatRut } from "@/lib/rutUtils";
-import * as XLSX from 'xlsx';
 
 export default function PerfilesAdmin() {
   const { user } = useContext(AppContext);
@@ -212,63 +210,6 @@ export default function PerfilesAdmin() {
     }
   };
 
-  const exportToExcel = () => {
-    try {
-      // Preparar los datos para exportar
-      const dataToExport = filteredItems.map(user => ({
-        'Nombre Completo': user.nombre_completo || '',
-        'RUT': user.rut || '',
-        'Email': user.email || '',
-        'TelÃ©fono': user.telefono || '',
-        'Fecha Nacimiento': user.fecha_nacimiento || '',
-        'DirecciÃ³n': user.direccion || '',
-        'Comuna': user.comuna || '',
-        'Fecha Ingreso': user.fecha_ingreso || '',
-        'Talla': user.talla || '',
-        'NÃºmero Cuenta': user.numero_cuenta || '',
-        'Banco': user.banco || '',
-        'Rol': user.rol || '',
-        'Estado': user.activo ? 'Activo' : 'Bloqueado',
-        'Fecha CreaciÃ³n': user.created_at ? new Date(user.created_at).toLocaleDateString('es-CL') : ''
-      }));
-
-      // Crear el libro de trabajo
-      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Socios');
-
-      // Ajustar ancho de columnas
-      const columnWidths = [
-        { wch: 25 }, // Nombre Completo
-        { wch: 15 }, // RUT
-        { wch: 25 }, // Email
-        { wch: 15 }, // TelÃ©fono
-        { wch: 15 }, // Fecha Nacimiento
-        { wch: 30 }, // DirecciÃ³n
-        { wch: 15 }, // Comuna
-        { wch: 15 }, // Fecha Ingreso
-        { wch: 8 },  // Talla
-        { wch: 18 }, // NÃºmero Cuenta
-        { wch: 20 }, // Banco
-        { wch: 12 }, // Rol
-        { wch: 10 }, // Estado
-        { wch: 15 }  // Fecha CreaciÃ³n
-      ];
-      worksheet['!cols'] = columnWidths;
-
-      // Generar el archivo
-      const fileName = `Socios_${new Date().toISOString().split('T')[0]}.xlsx`;
-      XLSX.writeFile(workbook, fileName);
-
-      setMsg(`âœ… Archivo exportado: ${fileName}`);
-      setTipo("success");
-    } catch (error) {
-      console.error('Error al exportar:', error);
-      setMsg('Error al exportar el archivo Excel');
-      setTipo('error');
-    }
-  };
-
   const comunasTarapaca = [
     "Iquique",
     "Alto Hospicio",
@@ -317,20 +258,12 @@ export default function PerfilesAdmin() {
     <div className="max-w-6xl space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Perfiles de usuarios</h1>
-        <div className="flex gap-3">
-          <button
-            onClick={exportToExcel}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg shadow-emerald-100 transition-all flex items-center gap-2"
-          >
-            <span>ðŸ“Š</span> Exportar Excel
-          </button>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg shadow-sky-100 transition-all flex items-center gap-2"
-          >
-            <span>+</span> Crear Usuario
-          </button>
-        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg shadow-sky-100 transition-all flex items-center gap-2"
+        >
+          <span>+</span> Crear Usuario
+        </button>
       </div>
 
       {msg && (
@@ -351,9 +284,8 @@ export default function PerfilesAdmin() {
           type="text"
           placeholder="Ingresa el RUT para buscar..."
           value={searchRut}
-          onChange={(e) => setSearchRut(formatRut(e.target.value))}
+          onChange={(e) => setSearchRut(e.target.value)}
           className="w-full border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-          maxLength={12}
         />
       </div>
 
@@ -428,9 +360,9 @@ export default function PerfilesAdmin() {
                 <td className="p-3 text-right space-x-2">
                   <button
                     onClick={() => toggleActivo(u.id, u.activo)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${u.activo
-                        ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    className={`px-3 py-1 rounded-lg text-white ${u.activo
+                      ? "bg-red-600 hover:bg-red-700"
+                      : "bg-green-600 hover:bg-green-700"
                       }`}
                   >
                     {u.activo ? "Desactivar" : "Activar"}
@@ -438,7 +370,10 @@ export default function PerfilesAdmin() {
 
                   <button
                     onClick={() => toggleRol(u.id, u.rol)}
-                    className="px-3 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-semibold transition-all"
+                    className={`px-3 py-1 rounded-lg text-white text-xs font-bold ${u.rol === "directiva"
+                      ? "bg-slate-600 hover:bg-slate-700"
+                      : "bg-blue-600 hover:bg-blue-700"
+                      }`}
                   >
                     {u.rol === "directiva" ? "Quitar Admin" : "Hacer Admin"}
                   </button>
@@ -448,14 +383,14 @@ export default function PerfilesAdmin() {
                       setUserToReset(u);
                       setShowResetModal(true);
                     }}
-                    className="px-3 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-semibold transition-all"
+                    className="px-3 py-1 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold"
                   >
                     Reset Pass
                   </button>
 
                   <button
                     onClick={() => handleEditUser(u)}
-                    className="px-3 py-1 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold transition-all"
+                    className="px-3 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-700 text-white text-xs font-bold"
                   >
                     Editar Perfil
                   </button>
@@ -493,10 +428,9 @@ export default function PerfilesAdmin() {
                   type="text"
                   placeholder="Ej: 11.222.333-k"
                   value={newUserData.rut}
-                  onChange={(e) => setNewUserData({ ...newUserData, rut: formatRut(e.target.value) })}
+                  onChange={(e) => setNewUserData({ ...newUserData, rut: e.target.value })}
                   className="w-full px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-sky-500 focus:bg-white rounded-xl outline-none transition-all font-bold"
                   required
-                  maxLength={12}
                 />
               </div>
 
@@ -622,24 +556,24 @@ export default function PerfilesAdmin() {
             </div>
             <form onSubmit={handleSaveEdit} className="space-y-6">
               <div className="bg-slate-50 rounded-2xl p-6 space-y-4">
-                <h4 className="text-md font-black text-slate-700 uppercase tracking-tight mb-4">Informaciï¿½n Personal</h4>
+                <h4 className="text-md font-black text-slate-700 uppercase tracking-tight mb-4">Información Personal</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre Completo</label><input type="text" value={editForm.nombre_completo || ""} onChange={(e) => setEditForm({ ...editForm, nombre_completo: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">RUT</label><input type="text" value={editForm.rut || ""} onChange={(e) => setEditForm({ ...editForm, rut: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" placeholder="Sin puntos y sin guiï¿½n" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">RUT</label><input type="text" value={editForm.rut || ""} onChange={(e) => setEditForm({ ...editForm, rut: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" placeholder="Sin puntos y sin guión" /></div>
                   <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label><input type="email" value={editForm.email || ""} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Telï¿½fono</label><input type="text" value={editForm.telefono || ""} onChange={(e) => setEditForm({ ...editForm, telefono: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fecha de Nacimiento</label><input type="date" value={editForm.fecha_nacimiento || ""} min="1920-01-01" max="2020-12-31" onChange={(e) => setEditForm({ ...editForm, fecha_nacimiento: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Teléfono</label><input type="text" value={editForm.telefono || ""} onChange={(e) => setEditForm({ ...editForm, telefono: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fecha de Nacimiento</label><input type="date" value={editForm.fecha_nacimiento || ""} onChange={(e) => setEditForm({ ...editForm, fecha_nacimiento: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
                   <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Talla Polera</label><select value={editForm.talla || ""} onChange={(e) => setEditForm({ ...editForm, talla: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold"><option value="">Selecciona talla</option><option value="XS">XS</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="XXL">XXL</option></select></div>
-                  <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Direcciï¿½n</label><input type="text" value={editForm.direccion || ""} onChange={(e) => setEditForm({ ...editForm, direccion: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
+                  <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dirección</label><input type="text" value={editForm.direccion || ""} onChange={(e) => setEditForm({ ...editForm, direccion: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
                   <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Comuna</label><select value={editForm.comuna || ""} onChange={(e) => setEditForm({ ...editForm, comuna: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold"><option value="">Selecciona comuna</option>{comunasTarapaca.map(comuna => (<option key={comuna} value={comuna}>{comuna}</option>))}</select></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fecha de Ingreso al Club</label><input type="date" value={editForm.fecha_ingreso || ""} min="2008-08-23" max="2025-12-29" onChange={(e) => setEditForm({ ...editForm, fecha_ingreso: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fecha de Ingreso al Club</label><input type="date" value={editForm.fecha_ingreso || ""} onChange={(e) => setEditForm({ ...editForm, fecha_ingreso: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
                 </div>
               </div>
               <div className="bg-slate-50 rounded-2xl p-6 space-y-4">
                 <h4 className="text-md font-black text-slate-700 uppercase tracking-tight mb-4">Datos Bancarios</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Banco</label><select value={editForm.banco || ""} onChange={(e) => setEditForm({ ...editForm, banco: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold"><option value="">Selecciona banco</option>{bancosChile.map(banco => (<option key={banco} value={banco}>{banco}</option>))}</select></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nï¿½mero de Cuenta</label><input type="text" value={editForm.numero_cuenta || ""} onChange={(e) => setEditForm({ ...editForm, numero_cuenta: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" placeholder="Nï¿½mero de cuenta bancaria" /></div>
+                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Número de Cuenta</label><input type="text" value={editForm.numero_cuenta || ""} onChange={(e) => setEditForm({ ...editForm, numero_cuenta: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" placeholder="Número de cuenta bancaria" /></div>
                 </div>
               </div>
               <div className="pt-4 flex gap-3">

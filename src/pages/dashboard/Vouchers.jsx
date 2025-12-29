@@ -191,8 +191,22 @@ export default function Vouchers() {
     if (esMensual) {
       // Identificar el primer mes pendiente en el año visual (o el siguiente)
       const pagados = vouchersActuales.filter(v => v.anio === anioVisual).map(v => v.mes);
-      let primerMesPendiente = 1;
-      for (let m = 1; m <= 12; m++) {
+
+      // Determinar el mes de inicio basado en la fecha de ingreso del usuario
+      let mesInicio = 1; // Por defecto, enero
+      if (userProfile?.fecha_ingreso) {
+        const fechaIngreso = new Date(userProfile.fecha_ingreso);
+        const mesIngreso = fechaIngreso.getMonth() + 1; // 1-12
+        const anioIngreso = fechaIngreso.getFullYear();
+
+        // Si estamos viendo el año de ingreso, empezar desde el mes de ingreso
+        if (anioVisual === anioIngreso) {
+          mesInicio = mesIngreso;
+        }
+      }
+
+      let primerMesPendiente = mesInicio;
+      for (let m = mesInicio; m <= 12; m++) {
         if (!pagados.includes(m)) {
           primerMesPendiente = m;
           break;
@@ -204,11 +218,13 @@ export default function Vouchers() {
       let currAnio = anioVisual;
 
       for (let i = 0; i < numCuotasAPagar; i++) {
-        nuevosMeses.push({ mes: currMes, anio: currAnio });
-        currMes++;
-        if (currMes > 12) {
-          currMes = 1;
-          currAnio++;
+        // Solo agregar meses que estén dentro del año visual actual
+        if (currMes <= 12 && currAnio === anioVisual) {
+          nuevosMeses.push({ mes: currMes, anio: currAnio });
+          currMes++;
+        } else {
+          // Si llegamos a un nuevo año, detener el cálculo
+          break;
         }
       }
       setMesesCalculados(nuevosMeses);
@@ -233,7 +249,7 @@ export default function Vouchers() {
       setMesesCalculados(nuevasCuotas);
     }
 
-  }, [multiCuotas, numCuotasAPagar, periodoSel, vouchersActuales, anioVisual]);
+  }, [multiCuotas, numCuotasAPagar, periodoSel, vouchersActuales, anioVisual, userProfile]);
 
   // Determinar el "Plan" actual (cuántas cuotas son en total)
   // Si ya existen vouchers, tomamos 'total_cuotas' del primero.
@@ -772,9 +788,40 @@ export default function Vouchers() {
                         <input
                           type="number"
                           min="1"
-                          max="12"
+                          max={(() => {
+                            // Calcular el máximo de meses disponibles en el año actual
+                            if (!periodoSel || !userProfile?.fecha_ingreso) return 12;
+                            const esMensual = periodoSel.concepto?.toLowerCase().includes("mensual") || periodoSel.nombre?.toLowerCase().includes("mensual");
+                            if (!esMensual) return 12;
+
+                            const fechaIngreso = new Date(userProfile.fecha_ingreso);
+                            const mesIngreso = fechaIngreso.getMonth() + 1;
+                            const anioIngreso = fechaIngreso.getFullYear();
+
+                            // Si estamos viendo el año de ingreso, calcular meses desde el ingreso hasta diciembre
+                            if (anioVisual === anioIngreso) {
+                              return 12 - mesIngreso + 1; // Ej: si ingresó en octubre (10), son 3 meses (oct, nov, dic)
+                            }
+                            return 12;
+                          })()}
                           value={numCuotasAPagar}
-                          onChange={(e) => setNumCuotasAPagar(Math.max(1, Math.min(12, parseInt(e.target.value) || 1)))}
+                          onChange={(e) => {
+                            const maxMeses = (() => {
+                              if (!periodoSel || !userProfile?.fecha_ingreso) return 12;
+                              const esMensual = periodoSel.concepto?.toLowerCase().includes("mensual") || periodoSel.nombre?.toLowerCase().includes("mensual");
+                              if (!esMensual) return 12;
+
+                              const fechaIngreso = new Date(userProfile.fecha_ingreso);
+                              const mesIngreso = fechaIngreso.getMonth() + 1;
+                              const anioIngreso = fechaIngreso.getFullYear();
+
+                              if (anioVisual === anioIngreso) {
+                                return 12 - mesIngreso + 1;
+                              }
+                              return 12;
+                            })();
+                            setNumCuotasAPagar(Math.max(1, Math.min(maxMeses, parseInt(e.target.value) || 1)));
+                          }}
                           className="w-full text-3xl p-6 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 font-black shadow-sm outline-none bg-white transition-all"
                         />
                         <div className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300 font-bold text-lg">MESES</div>
