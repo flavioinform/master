@@ -17,6 +17,7 @@ import Mision from "./pages/Mision";
 // Socio
 import Vouchers from "@/pages/dashboard/Vouchers";
 import Perfil from "@/pages/dashboard/Perfil";
+import MisCuotas from "@/pages/dashboard/MisCuotas";
 
 // Convocatorias
 import ConvocatoriasList from "@/pages/dashboard/ConvocatoriasList";
@@ -24,6 +25,7 @@ import ConvocatoriaInscripcion from "@/pages/dashboard/ConvocatoriaInscripcion";
 
 // Directiva
 import VouchersAdmin from "@/pages/dashboard/VouchersAdmin";
+import PagosMensuales from "@/pages/dashboard/directiva/PagosMensuales";
 import CrearConvocatoria from "@/pages/dashboard/directiva/CrearConvocatoria";
 import CompetitionManager from "@/pages/dashboard/directiva/CompetitionManager";
 import PerfilesAdmin from "@/pages/dashboard/directiva/PerfilesAdmin";
@@ -57,7 +59,7 @@ function App() {
             }
           />
 
-          <Route
+          {/* <Route
             path="/registro"
             element={
               <>
@@ -65,7 +67,7 @@ function App() {
                 <Registro />
               </>
             }
-          />
+          /> */}
 
           <Route
             path="/nosotros"
@@ -101,6 +103,7 @@ function App() {
             {/* Inicio dashboard */}
             <Route index element={<DashboardHome />} />
             {/* Socio */}
+            <Route path="mis-cuotas" element={<MisCuotas />} />
             <Route path="vouchers" element={<Vouchers />} />
             <Route path="perfil" element={<Perfil />} />
             <Route path="historial" element={<Historial />} />
@@ -114,6 +117,15 @@ function App() {
             <Route path="calendario" element={<CalendarioCompetencias />} />
 
             {/* Directiva */}
+            <Route
+              path="directiva/pagos-mensuales"
+              element={
+                <DirectivaRoute>
+                  <PagosMensuales />
+                </DirectivaRoute>
+              }
+            />
+
             <Route
               path="directiva/vouchers"
               element={

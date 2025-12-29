@@ -8,6 +8,29 @@ function Login() {
     return rut.replace(/[^0-9kK]/g, "").toLowerCase();
   }
 
+  function formatRut(value) {
+    // Remove all non-alphanumeric characters
+    const cleaned = value.replace(/[^0-9kK]/gi, '');
+
+    // If empty, return empty
+    if (!cleaned) return '';
+
+    // Separate body and verifier digit
+    const body = cleaned.slice(0, -1);
+    const verifier = cleaned.slice(-1).toLowerCase();
+
+    // Format body with dots (reverse, add dots every 3 digits, reverse back)
+    let formattedBody = body.split('').reverse().join('');
+    formattedBody = formattedBody.match(/.{1,3}/g)?.join('.') || formattedBody;
+    formattedBody = formattedBody.split('').reverse().join('');
+
+    // Return formatted RUT
+    if (cleaned.length === 1) {
+      return verifier;
+    }
+    return `${formattedBody}-${verifier}`;
+  }
+
   const [rut, setRut] = useState("");
   const [password, setPassword] = useState("");
   const [mensaje, setMensaje] = useState("");
@@ -97,10 +120,11 @@ function Login() {
               <input
                 type="text"
                 value={rut}
-                onChange={(e) => setRut(e.target.value)}
+                onChange={(e) => setRut(formatRut(e.target.value))}
                 placeholder="Ej: 11.222.333-k"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50"
                 required
+                maxLength={12}
               />
             </div>
 
@@ -135,9 +159,9 @@ function Login() {
             >
               {cargando ? "Ingresando..." : "Ingresar"}
             </button>
-            <span className="text-center block mt-4 text-sm text-gray-600">
+            {/* <span className="text-center block mt-4 text-sm text-gray-600">
               ¿No tienes cuenta? <a href="/registro" className="text-blue-600 font-bold hover:underline">Regístrate aquí</a>
-            </span>
+            </span> */}
           </form>
         </div>
       </div>

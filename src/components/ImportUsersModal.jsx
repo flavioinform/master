@@ -15,7 +15,7 @@ export default function ImportUsersModal({ onClose, onReload }) {
         if (!file) return;
 
         setLoading(true);
-        setMsg("Leyendo archivo...");
+        setMsg("LECTURA EN CURSO...");
         setLogs([]);
 
         const reader = new FileReader();
@@ -27,9 +27,9 @@ export default function ImportUsersModal({ onClose, onReload }) {
                 const ws = wb.Sheets[wsName];
                 const data = XLSX.utils.sheet_to_json(ws);
 
-                if (!data || data.length === 0) throw new Error("Archivo vacío.");
+                if (!data || data.length === 0) throw new Error("EL ARCHIVO ESTÁ VACÍO.");
 
-                setMsg(`Procesando ${data.length} filas...`);
+                setMsg(`PROCESANDO ${data.length} FILAS...`);
 
                 if (mode === "socios") {
                     await processSocios(data);
@@ -39,7 +39,7 @@ export default function ImportUsersModal({ onClose, onReload }) {
 
             } catch (err) {
                 console.error(err);
-                setMsg("Error: " + err.message);
+                setMsg("⚠️ ERROR: " + err.message.toUpperCase());
             } finally {
                 setLoading(false);
             }
@@ -49,7 +49,6 @@ export default function ImportUsersModal({ onClose, onReload }) {
 
     const processSocios = async (data) => {
         const rowsToInsert = [];
-        // Process rows for Users
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
             const rut = (row.RUT || "").trim();
@@ -69,25 +68,22 @@ export default function ImportUsersModal({ onClose, onReload }) {
         }
 
         if (rowsToInsert.length === 0) {
-            setMsg("No hay datos válidos."); return;
+            setMsg("🚨 NO SE ENCONTRARON DATOS VÁLIDOS."); return;
         }
 
         const { error } = await supabase.from("profiles").upsert(rowsToInsert, { onConflict: 'rut' });
 
         if (error) {
-            setMsg("Error: " + error.message);
+            setMsg("🚨 ERROR AL GUARDAR: " + error.message.toUpperCase());
         } else {
-            setMsg(`✅ Se importaron ${rowsToInsert.length} socios.`);
+            setMsg(`✅ ¡ÉXITO! SE IMPORTARON ${rowsToInsert.length} SOCIOS.`);
             if (onReload) onReload();
         }
     };
 
     const processPagos = async (data) => {
-        // 1. Find or Create Period "Histórico [Year]"
         const periodName = `Histórico ${year}`;
-
-        // Check if exists
-        let { data: existingPeriod, error: ep } = await supabase
+        let { data: existingPeriod } = await supabase
             .from("payment_periods")
             .select("id")
             .eq("nombre", periodName)
@@ -96,42 +92,35 @@ export default function ImportUsersModal({ onClose, onReload }) {
         let periodId = existingPeriod?.id;
 
         if (!periodId) {
-            setLogs(prev => [...prev, `Creando periodo automático: ${periodName}...`]);
-            // Create it
+            setLogs(prev => [...prev, `CREANDO PERIODO: ${periodName}...`]);
             const { data: newPeriod, error: en } = await supabase.from("payment_periods").insert({
                 concepto: "Histórico",
                 nombre: periodName,
-                descripcion: "Importación masiva de pagos históricos",
-                monto: 0, // Variable
+                descripcion: "Importación masiva",
+                monto: 0,
                 fecha_inicio: `${year}-01-01`,
                 fecha_fin: `${year}-12-31`,
                 activo: true
             }).select("id").single();
 
-            if (en) throw new Error("No se pudo crear el periodo histórico: " + en.message);
+            if (en) throw new Error("NO SE PUDO CREAR PERIODO: " + en.message);
             periodId = newPeriod.id;
         }
 
-        // 2. Process Vouchers
         const vouchersToInsert = [];
-        const ruts = data.map(r => (r.RUT || "").trim()).filter(r => r);
-
-        // Fetch all profiles to map RUT -> ID
-        // (Performance optimization: fetch only needed RUTs would be better but simple fetch all is fine for <10k users)
         const { data: profiles, error: eu } = await supabase.from("profiles").select("id, rut");
         if (eu) throw eu;
 
         const rutMap = new Map();
         profiles.forEach(p => {
-            if (!p.rut) return; // ✅ Skip profiles without RUT in DB
-            // Map both raw and clean RUT
+            if (!p.rut) return;
             rutMap.set(p.rut.toLowerCase(), p.id);
             rutMap.set(p.rut.replace(/\./g, "").replace(/-/g, "").toLowerCase(), p.id);
         });
 
         for (let i = 0; i < data.length; i++) {
             const row = data[i];
-            const rawRut = String(row.RUT || "").trim(); // ✅ Ensure String from Excel
+            const rawRut = String(row.RUT || "").trim();
             const monto = row.Pago || row.Monto || 0;
 
             if (!rawRut) continue;
@@ -143,101 +132,149 @@ export default function ImportUsersModal({ onClose, onReload }) {
                     user_id: userId,
                     period_id: periodId,
                     estado: 'aprobado',
-                    archivo_path: "SIN_COMPROBANTE", // Bypass NOT NULL constraint
+                    archivo_path: "SIN_COMPROBANTE",
                     comentario: `Importado ${new Date().toLocaleDateString()}`,
                     created_at: `${year}-01-01T12:00:00+00:00`
                 });
             } else {
-                if (!userId) setLogs(prev => [...prev, `RUT no encontrado: ${rawRut}`]);
+                if (!userId) setLogs(prev => [...prev, `RUT NO ENCONTRADO: ${rawRut}`]);
             }
         }
 
         if (vouchersToInsert.length === 0) {
-            setMsg("No se generaron pagos. Verifica los RUTs.");
+            setMsg("🚨 NO SE GENERARON PAGOS. REVISAR RUTS.");
             return;
         }
 
         const { error: ev } = await supabase.from("vouchers").insert(vouchersToInsert);
         if (ev) {
-            setMsg("Error insertando pagos: " + ev.message);
+            setMsg("🚨 ERROR AL INSERTAR: " + ev.message.toUpperCase());
         } else {
-            setMsg(`✅ Se importaron ${vouchersToInsert.length} pagos para el año ${year}.`);
+            setMsg(`✅ ¡ÉXITO! ${vouchersToInsert.length} PAGOS IMPORTADOS (${year}).`);
             if (onReload) onReload();
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 space-y-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white border border-slate-100 rounded-[2.5rem] shadow-2xl max-w-2xl w-full p-8 md:p-12 space-y-8 animate-in zoom-in-95 duration-200 relative overflow-hidden">
+                {/* Decorative background element */}
+                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full -z-10 opacity-50"></div>
+
                 <div className="flex justify-between items-center">
-                    <h3 className="text-xl font-bold text-gray-800">Herramienta de Importación</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
+                    <div className="space-y-1">
+                        <h3 className="text-3xl font-black text-slate-900 uppercase tracking-tight">Importación Masiva</h3>
+                        <p className="text-sm font-bold text-slate-400 uppercase tracking-widest italic">Carga de datos desde Excel</p>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-900 w-12 h-12 rounded-xl flex items-center justify-center transition-all border border-slate-100"
+                    >
+                        <span className="text-2xl">✕</span>
+                    </button>
                 </div>
 
-                {/* TABS */}
-                <div className="flex border-b">
+                {/* TABS - Clean Modern */}
+                <div className="flex p-1 bg-slate-50 rounded-2xl border border-slate-100">
                     <button
-                        className={`flex-1 py-2 font-medium ${mode === 'socios' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}
+                        className={`flex-1 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${mode === 'socios'
+                            ? 'bg-white text-blue-600 shadow-sm border border-slate-100'
+                            : 'text-slate-400 hover:text-slate-600'}`}
                         onClick={() => setMode('socios')}
                     >
-                        Socios (RUT/Nombre)
+                        1. Importar Socios
                     </button>
                     <button
-                        className={`flex-1 py-2 font-medium ${mode === 'pagos' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500'}`}
+                        className={`flex-1 py-4 rounded-xl font-black text-xs uppercase tracking-widest transition-all ${mode === 'pagos'
+                            ? 'bg-white text-blue-600 shadow-sm border border-slate-100'
+                            : 'text-slate-400 hover:text-slate-600'}`}
                         onClick={() => setMode('pagos')}
                     >
-                        Pagos Históricos (RUT/Monto)
+                        2. Historial de Pagos
                     </button>
                 </div>
 
-                <div className="text-sm text-gray-600">
+                <div className="bg-slate-50/50 border border-slate-100 p-6 rounded-[2rem] space-y-4">
                     {mode === 'socios' ? (
-                        <p>Excel con columnas: <b>Nombre, Paterno, Materno, RUT, Email</b>.</p>
-                    ) : (
                         <div className="space-y-2">
-                            <p>Excel con columnas: <b>RUT, Pago</b>.</p>
-                            <div className="flex items-center gap-2 bg-gray-50 p-2 rounded">
-                                <span className="font-bold">Asignar al Año:</span>
-                                <input
-                                    type="number"
-                                    className="border rounded p-1 w-20"
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Requisitos del Excel</p>
+                            <p className="text-lg font-bold text-slate-700 leading-tight">
+                                Las columnas deben ser: <span className="text-blue-600">Nombre, Paterno, Materno, RUT, Email</span>
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            <div className="space-y-2">
+                                <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Requisitos del Excel</p>
+                                <p className="text-lg font-bold text-slate-700 leading-tight">
+                                    Las columnas deben ser: <span className="text-blue-600">RUT, Pago</span>
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-6 bg-white border border-blue-100 p-5 rounded-2xl shadow-sm">
+                                <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Año Destino:</span>
+                                <select
+                                    className="border-none bg-slate-50 rounded-lg px-4 py-2 text-xl font-black text-blue-600 w-32 outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none text-center"
                                     value={year}
-                                    onChange={e => setYear(e.target.value)}
-                                />
-                                <span className="text-xs text-gray-500">(Se creará "Histórico {year}")</span>
+                                    onChange={e => setYear(Number(e.target.value))}
+                                >
+                                    {Array.from({ length: 33 }, (_, i) => 2008 + i).map(y => (
+                                        <option key={y} value={y}>{y}</option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
                     )}
                 </div>
 
                 {msg && (
-                    <div className={`p-3 rounded text-sm ${msg.includes("Error") ? "bg-red-50 text-red-700" : "bg-blue-50 text-blue-700"}`}>
+                    <div className={`p-6 rounded-2xl border text-sm font-bold text-center animate-in slide-in-from-top-2 ${msg.includes("ERROR") || msg.includes("🚨") ? "bg-rose-50 border-rose-100 text-rose-600" : "bg-emerald-50 border-emerald-100 text-emerald-600"}`}>
                         {msg}
                     </div>
                 )}
 
-                <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center cursor-pointer hover:bg-gray-50">
+                <div className="relative group">
                     <input
                         type="file"
                         accept=".xlsx, .xls, .csv"
                         onChange={handleFileUpload}
                         disabled={loading}
-                        className="w-full"
+                        className="absolute inset-0 opacity-0 cursor-pointer z-20"
                     />
+                    <div className="p-10 border-2 border-dashed border-slate-200 rounded-[2.5rem] text-center bg-slate-50/30 group-hover:bg-blue-50/30 group-hover:border-blue-200 transition-all">
+                        <div className="space-y-4">
+                            <div className="w-20 h-20 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
+                                <span className="text-4xl">📂</span>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-lg font-black text-slate-900 uppercase tracking-tight block">
+                                    {loading ? "Procesando Archivo..." : "Selecciona tu Archivo"}
+                                </span>
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block">
+                                    Formatos soportados: .xlsx, .xls, .csv
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {logs.length > 0 && (
-                    <div className="bg-gray-100 p-3 rounded text-xs text-gray-700 max-h-40 overflow-y-auto space-y-1">
-                        {logs.map((l, i) => <div key={i}>{l}</div>)}
+                    <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl text-xs font-bold text-slate-400 max-h-32 overflow-y-auto space-y-1 font-mono">
+                        {logs.map((l, i) => <div key={i} className="flex gap-2"><span className="text-blue-500">›</span> {l}</div>)}
                     </div>
                 )}
 
-                <div className="flex justify-end pt-2">
+                <div className="flex gap-4">
                     <button
                         onClick={onClose}
-                        className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium"
+                        className="flex-1 bg-slate-50 hover:bg-slate-100 text-slate-600 font-black py-4 rounded-2xl text-xs uppercase tracking-widest transition-all border border-slate-200"
                     >
-                        Cerrar
+                        Cancelar
+                    </button>
+                    <button
+                        onClick={onClose}
+                        className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl text-xs uppercase tracking-widest transition-all shadow-lg shadow-blue-500/25 border border-blue-500"
+                    >
+                        Cerrar y Volver
                     </button>
                 </div>
             </div>

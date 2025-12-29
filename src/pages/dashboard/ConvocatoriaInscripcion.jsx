@@ -272,73 +272,87 @@ export default function ConvocatoriaInscripcion() {
   const profileIncomplete = !profile?.nombre_completo || !profile?.rut || !profile?.fecha_nacimiento || !profile?.telefono;
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
+    <div className="max-w-6xl mx-auto space-y-10 font-sans pb-20">
       <style>{printStyles}</style>
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 no-print">
-        <div className="flex-1">
-          <Link to="/dashboard/convocatorias" className="text-sm text-blue-600 hover:underline">← Volver a Lista</Link>
-          <h1 className="text-3xl font-bold text-gray-900 mt-2">{competition.name}</h1>
-          <p className="text-gray-500">{competition.organizer} • {new Date(competition.start_date).toLocaleDateString()} al {new Date(competition.end_date).toLocaleDateString()}</p>
+      {/* Header - Clean Modern */}
+      <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 md:p-12 shadow-xl shadow-slate-200/50 text-white relative overflow-hidden no-print">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+          <div className="flex-1 space-y-4">
+            <Link to="/dashboard/convocatorias" className="inline-block bg-white/10 hover:bg-white/20 text-white px-6 py-2 rounded-xl text-xs font-black transition-all uppercase mb-4 backdrop-blur-sm border border-white/20 tracking-widest">
+              ← Volver a lista
+            </Link>
+            <h1 className="text-4xl md:text-6xl font-black uppercase tracking-tight leading-none mb-2">
+              {competition.name}
+            </h1>
+            <div className="flex items-center gap-3">
+              <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
+              <p className="text-lg md:text-xl font-medium text-slate-400 uppercase tracking-widest">
+                {competition.organizer} • {new Date(competition.start_date).toLocaleDateString()}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => window.print()}
+            className="group relative overflow-hidden bg-white text-slate-900 px-10 py-5 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3 shadow-lg shadow-white/10 active:scale-95 whitespace-nowrap"
+          >
+            <span className="relative z-10 flex items-center gap-2 uppercase tracking-tight">
+              <span className="text-2xl">📥</span> Descargar Ficha
+            </span>
+            <div className="absolute inset-0 bg-blue-500 translate-y-full group-hover:translate-y-0 transition-transform duration-300 -z-0"></div>
+          </button>
         </div>
-        <button
-          onClick={() => window.print()}
-          className="bg-white border-2 border-slate-900 text-slate-900 px-6 py-2.5 rounded-xl font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-        >
-          <span>📥</span> Descargar Ficha
-        </button>
       </div>
 
-      {/* Printable Ficha Card (Hidden by default, visible on print) */}
+      {/* Printable Ficha Card (Clean Modern PRINT VERSION) */}
       <div id="print-ficha" className="hidden">
-        <div className="border-[6px] border-slate-900 p-10 rounded-[40px] bg-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-slate-900/5 rounded-full -mr-32 -mt-32"></div>
+        <div className="border border-slate-200 p-16 rounded-[4rem] bg-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-slate-900/5 rounded-full -mr-40 -mt-40"></div>
 
-          <div className="flex justify-between items-start mb-12 border-b-4 border-slate-900 pb-8 relative z-10">
+          <div className="flex justify-between items-start mb-16 border-b border-slate-100 pb-12 relative z-10">
             <div>
-              <h1 className="text-5xl font-black text-slate-900 tracking-tighter uppercase mb-2">Ficha de Atleta</h1>
-              <p className="text-xl font-bold text-slate-500 tracking-widest uppercase">{competition.name}</p>
+              <h1 className="text-6xl font-black text-slate-900 tracking-tighter uppercase mb-2 leading-none">Ficha de Atleta</h1>
+              <p className="text-2xl font-black text-slate-400 tracking-widest uppercase">{competition.name}</p>
             </div>
             <div className="text-right">
-              <div className="bg-slate-900 text-white px-6 py-2 rounded-full font-black text-sm uppercase tracking-widest">
-                ID: {profile?.rut}
+              <div className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black text-xl uppercase tracking-widest">
+                RUT: {profile?.rut}
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-12 relative z-10">
-            <div className="space-y-8">
+          <div className="grid grid-cols-2 gap-16 relative z-10">
+            <div className="space-y-12">
               <div>
-                <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">Nombre Completo</label>
-                <p className="text-2xl font-bold text-slate-900 leading-tight">{profile?.nombre_completo}</p>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] block mb-4">NOMBRE COMPLETO</label>
+                <p className="text-4xl font-black text-slate-900 leading-tight uppercase">{profile?.nombre_completo}</p>
               </div>
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-10">
                 <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">RUT</label>
-                  <p className="text-xl font-bold text-slate-900">{profile?.rut}</p>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] block mb-4">RUT IDENTIDAD</label>
+                  <p className="text-2xl font-black text-slate-900">{profile?.rut}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest block mb-2">Talla</label>
-                  <p className="text-xl font-bold text-slate-900">{profile?.talla || "—"}</p>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] block mb-4">Talla Polera</label>
+                  <p className="text-2xl font-black text-slate-900 uppercase">{profile?.talla || "—"}</p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-slate-50 p-8 rounded-3xl border-2 border-slate-200">
-              <h3 className="font-black text-slate-900 uppercase tracking-widest text-sm mb-6 border-b border-slate-200 pb-3">Pruebas Inscritas</h3>
-              <div className="space-y-4">
+            <div className="bg-slate-50/50 p-12 rounded-[3.5rem] border border-slate-100">
+              <h3 className="font-black text-slate-900 uppercase tracking-[0.3em] text-xl mb-10 border-b border-slate-200 pb-6">Pruebas Inscritas</h3>
+              <div className="space-y-8">
                 {stages.map(stage => {
                   const stageEvents = stage.competition_events.filter(evt => selectedEvents[evt.id]?.selected);
                   if (stageEvents.length === 0) return null;
                   return (
-                    <div key={stage.id}>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">{stage.name}</p>
+                    <div key={stage.id} className="space-y-4">
+                      <p className="text-sm font-black text-blue-600 uppercase tracking-[0.2em]">{stage.name}</p>
                       {stageEvents.map(evt => (
-                        <div key={evt.id} className="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
-                          <span className="text-sm font-bold text-slate-800">#{evt.event_number} {evt.event_catalog?.name}</span>
-                          <span className="text-sm font-black text-slate-900 bg-white px-3 py-1 rounded-lg border border-slate-200">
-                            {selectedEvents[evt.id]?.time || "--:--"}
+                        <div key={evt.id} className="flex justify-between items-center py-6 border-b border-slate-100 last:border-0">
+                          <span className="text-xl font-black text-slate-700 uppercase">#{evt.event_number} {evt.event_catalog?.name}</span>
+                          <span className="text-2xl font-black text-slate-900 bg-white px-5 py-2 rounded-xl border border-slate-200">
+                            {selectedEvents[evt.id]?.time || "-- : --"}
                           </span>
                         </div>
                       ))}
@@ -349,82 +363,100 @@ export default function ConvocatoriaInscripcion() {
             </div>
           </div>
 
-          <div className="mt-12 flex items-center justify-between opacity-30">
-            <p className="text-[10px] font-bold text-slate-900 uppercase tracking-widest">Generado por Club Master System</p>
-            <p className="text-[10px] font-bold text-slate-900 uppercase tracking-widest">{new Date().toLocaleDateString()}</p>
+          <div className="mt-20 flex items-center justify-between border-t border-slate-100 pt-10">
+            <p className="text-sm font-black text-slate-300 uppercase tracking-[0.3em]">Generado por Club Master System</p>
+            <p className="text-sm font-black text-slate-300 uppercase tracking-[0.3em]">{new Date().toLocaleDateString()}</p>
           </div>
         </div>
       </div>
 
       {msg && (
-        <div className={`p-3 rounded-lg border text-sm ${tipo === "error" ? "bg-red-50 border-red-200 text-red-700" : "bg-green-50 border-green-200 text-green-700"
-          }`}>
-          {msg}
+        <div className={`p-6 rounded-[1.5rem] border text-lg font-bold text-center animate-in zoom-in duration-300 ${tipo === "error" ? "bg-rose-50 border-rose-100 text-rose-700" : "bg-emerald-50 border-emerald-100 text-emerald-700"}`}>
+          {msg.toUpperCase()}
         </div>
       )}
 
       {profileIncomplete && (
-        <div className="p-3 rounded-lg border bg-red-50 border-red-200 text-red-700 text-sm">
-          Tu perfil está incompleto. Completa tu nombre, RUT, fecha de nacimiento y teléfono en tu perfil antes de inscribirte.
+        <div className="p-6 rounded-[1.5rem] bg-rose-50 border border-rose-100 text-rose-700 text-lg font-black uppercase text-center animate-pulse">
+          🚨 Tu perfil está incompleto. Por favor, actualiza tus datos antes de inscribirte.
         </div>
       )}
 
-      {/* User Info (Read-only) */}
-      <div className="bg-white rounded-xl shadow p-6">
-        <h3 className="font-bold text-lg mb-4">Tus Datos</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Nombre Completo</label>
-            <input className="w-full border rounded p-2 bg-gray-50" value={profile?.nombre_completo || ""} readOnly />
+      {/* User Info (Read-only) - Clean Modern */}
+      <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 md:p-10 shadow-sm space-y-10">
+        <div className="flex items-center gap-4">
+          <div className="bg-slate-900 text-white w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black">
+            ID
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600">RUT</label>
-            <input className="w-full border rounded p-2 bg-gray-50" value={profile?.rut || ""} readOnly />
+          <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Datos del Atleta</h3>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
+          <div className="space-y-3">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Nombre Completo</label>
+            <div className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 font-bold text-slate-900 uppercase text-lg">
+              {profile?.nombre_completo || ""}
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Fecha de Nacimiento</label>
-            <input className="w-full border rounded p-2 bg-gray-50" value={profile?.fecha_nacimiento || ""} readOnly />
+          <div className="space-y-3">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">RUT Identidad</label>
+            <div className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 font-bold text-slate-900 text-lg uppercase">
+              {profile?.rut || ""}
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Teléfono</label>
-            <input className="w-full border rounded p-2 bg-gray-50" value={profile?.telefono || ""} readOnly />
+          <div className="space-y-3">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Fecha de Nacimiento</label>
+            <div className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 font-bold text-slate-900 text-lg uppercase tracking-widest">
+              {profile?.fecha_nacimiento || ""}
+            </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-600">Talla Polera (Dato de Perfil)</label>
-            <input className="w-full border rounded p-2 bg-gray-50" value={profile?.talla || "No especificada"} readOnly />
+          <div className="space-y-3">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Talla Polera</label>
+            <div className="w-full bg-blue-50/50 border border-blue-100 rounded-2xl p-5 font-black text-xl text-blue-600 uppercase text-center">
+              {profile?.talla || "S/N"}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Stages & Events */}
-      <div className="bg-white rounded-xl shadow p-6">
-        <h3 className="font-bold text-lg mb-4">Selecciona Etapas y Pruebas</h3>
+      {/* Stages & Events - Clean Modern */}
+      <div className="bg-white border border-slate-100 rounded-[2.5rem] p-8 md:p-10 shadow-sm space-y-10">
+        <div className="flex items-center gap-4">
+          <div className="bg-slate-900 text-white w-12 h-12 rounded-xl flex items-center justify-center text-xl font-black">
+            02
+          </div>
+          <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Selecciona tus Pruebas</h3>
+        </div>
 
         {stages.length === 0 ? (
-          <p className="text-gray-500 text-sm">No hay etapas configuradas para esta competencia.</p>
+          <div className="py-20 text-center bg-slate-50 rounded-[2.5rem] border border-dashed border-slate-200">
+            <p className="text-xl text-slate-300 font-bold uppercase italic tracking-widest">No hay etapas configuradas</p>
+          </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-6">
             {stages.map(stage => {
               const isStageSelected = selectedStages.has(stage.id);
               const isExpanded = expandedStages.has(stage.id);
 
               return (
-                <div key={stage.id} className="border rounded-lg overflow-hidden">
+                <div key={stage.id} className={`border rounded-[2rem] overflow-hidden transition-all duration-300 ${isStageSelected ? 'border-blue-200 shadow-md shadow-blue-500/5' : 'border-slate-100'}`}>
                   {/* Stage Header */}
-                  <div className="bg-gray-50 p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
-                      <input
-                        type="checkbox"
-                        checked={isStageSelected}
-                        onChange={() => toggleStage(stage.id)}
-                        className="h-5 w-5"
-                        disabled={profileIncomplete}
-                      />
-                      <div className="flex-1">
-                        <h4 className="font-bold text-gray-800">{stage.name}</h4>
-                        <p className="text-xs text-gray-600">
+                  <div className={`p-6 flex flex-col md:flex-row items-center justify-between gap-6 transition-colors ${isStageSelected ? 'bg-blue-50/30' : 'bg-white'}`}>
+                    <div className="flex items-center gap-6 flex-1">
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={isStageSelected}
+                          onChange={() => toggleStage(stage.id)}
+                          className="h-8 w-8 rounded-lg border-slate-200 text-blue-600 focus:ring-4 focus:ring-blue-500/10 cursor-pointer appearance-none border checked:bg-blue-600 checked:border-blue-600 transition-all"
+                          disabled={profileIncomplete}
+                        />
+                        {isStageSelected && <span className="absolute inset-0 flex items-center justify-center text-white pointer-events-none text-xs font-black">✓</span>}
+                      </div>
+                      <div className="flex-1 space-y-1">
+                        <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight">{stage.name}</h4>
+                        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest italic">
                           {new Date(stage.date).toLocaleDateString()} • {stage.pool_type} • {stage.location}
-                          {stage.start_time && ` • Inicio: ${stage.start_time}`}
                         </p>
                       </div>
                     </div>
@@ -435,121 +467,125 @@ export default function ConvocatoriaInscripcion() {
                         else newSet.add(stage.id);
                         return newSet;
                       })}
-                      className="text-blue-600 text-sm font-bold"
+                      className={`px-6 py-3 rounded-xl text-xs font-black uppercase border transition-all ${isStageSelected ? 'bg-white border-blue-200 text-blue-600 shadow-sm' : 'bg-white border-slate-100 text-slate-400 hover:text-slate-900 hover:border-slate-300'}`}
                     >
-                      {isExpanded ? "▲ Ocultar" : "▼ Ver Pruebas"}
+                      {isExpanded ? "▲ Contraer" : "▼ Ver Pruebas"}
                     </button>
                   </div>
 
                   {/* Events List (Accordion) */}
-                  {isExpanded && isStageSelected && (
-                    <div className="p-4 bg-white border-t">
+                  {isExpanded && (
+                    <div className="p-8 bg-white border-t border-slate-50 space-y-6 animate-in slide-in-from-top-4 duration-300">
+                      {!isStageSelected && (
+                        <div className="bg-blue-50 text-blue-600 p-4 rounded-xl text-xs font-bold text-center uppercase tracking-widest border border-blue-100">
+                          Marca la etapa arriba para habilitar la selección de pruebas
+                        </div>
+                      )}
                       {stage.competition_events.length === 0 ? (
-                        <p className="text-sm text-gray-400 italic">Sin pruebas asignadas.</p>
+                        <p className="text-sm text-slate-400 font-bold italic text-center py-6">Sin pruebas asignadas.</p>
                       ) : (
-                        <div className="space-y-2">
+                        <div className={`space-y-4 ${!isStageSelected ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
                           {stage.competition_events.map(evt => {
                             const eventData = selectedEvents[evt.id] || { selected: false, time: "" };
 
                             return (
-                              <div key={evt.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded border">
-                                <input
-                                  type="checkbox"
-                                  checked={eventData.selected}
-                                  onChange={() => toggleEvent(evt.id)}
-                                  className="h-4 w-4"
-                                />
-                                <div className="flex-1">
-                                  <p className="font-medium text-sm">
-                                    #{evt.event_number} - {evt.event_catalog?.name || "Prueba"}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {evt.event_catalog?.distance}m {evt.event_catalog?.style}
-                                  </p>
+                              <div key={evt.id} className={`p-6 rounded-2xl border transition-all flex flex-col xl:flex-row xl:items-center gap-6 ${eventData.selected ? 'border-blue-600 bg-blue-50/20' : 'border-slate-50 bg-white hover:border-slate-200'}`}>
+                                <div className="flex items-center gap-5 flex-1">
+                                  <div className="relative">
+                                    <input
+                                      type="checkbox"
+                                      checked={eventData.selected}
+                                      onChange={() => toggleEvent(evt.id)}
+                                      className="h-6 w-6 border border-slate-200 rounded-md cursor-pointer appearance-none checked:bg-blue-600 checked:border-blue-600 transition-all"
+                                    />
+                                    {eventData.selected && <span className="absolute inset-0 flex items-center justify-center text-white pointer-events-none text-[10px] font-black">✓</span>}
+                                  </div>
+                                  <div className="flex-1 space-y-0.5">
+                                    <p className="text-lg font-black text-slate-900 uppercase tracking-tight">
+                                      #{evt.event_number} - {evt.event_catalog?.name}
+                                    </p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">
+                                      {evt.event_catalog?.distance}M {evt.event_catalog?.style}
+                                    </p>
+                                  </div>
                                 </div>
+
                                 {eventData.selected && (
-                                  <div className="flex flex-col md:flex-row gap-6">
+                                  <div className="flex flex-col md:flex-row gap-6 items-center bg-white p-5 rounded-xl border border-blue-100 shadow-sm">
                                     {/* Entry Time Selection */}
-                                    <div className="flex gap-2 items-center">
-                                      <div className="flex flex-col">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Min (Inscr.)</label>
-                                        <select
-                                          className="border rounded p-2 text-sm w-16"
-                                          value={parseTime(eventData.time).minutes}
-                                          onChange={(e) => updateTime(evt.id, parseInt(e.target.value), parseTime(eventData.time).seconds, parseTime(eventData.time).ms)}
-                                        >
-                                          {Array.from({ length: 60 }, (_, i) => (
-                                            <option key={i} value={i}>{i}</option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                      <span className="text-lg font-bold mt-5">:</span>
-                                      <div className="flex flex-col">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Seg (Inscr.)</label>
-                                        <select
-                                          className="border rounded p-2 text-sm w-16"
-                                          value={parseTime(eventData.time).seconds}
-                                          onChange={(e) => updateTime(evt.id, parseTime(eventData.time).minutes, parseInt(e.target.value), parseTime(eventData.time).ms)}
-                                        >
-                                          {Array.from({ length: 60 }, (_, i) => (
-                                            <option key={i} value={i}>{i}</option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                      <span className="text-lg font-bold mt-5">.</span>
-                                      <div className="flex flex-col">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Mil</label>
-                                        <select
-                                          className="border rounded p-2 text-sm w-16"
-                                          value={parseTime(eventData.time).ms}
-                                          onChange={(e) => updateTime(evt.id, parseTime(eventData.time).minutes, parseTime(eventData.time).seconds, parseInt(e.target.value))}
-                                        >
-                                          {Array.from({ length: 100 }, (_, i) => (
-                                            <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
-                                          ))}
-                                        </select>
+                                    <div className="space-y-3 w-full md:w-auto">
+                                      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Tiempo de Inscripción</label>
+                                      <div className="flex gap-2 items-center justify-center">
+                                        <div className="flex flex-col items-center">
+                                          <select
+                                            className="border border-slate-100 rounded-lg p-2 text-lg font-black bg-slate-50 w-16 outline-none focus:border-blue-600 transition-all appearance-none text-center"
+                                            value={parseTime(eventData.time).minutes}
+                                            onChange={(e) => updateTime(evt.id, parseInt(e.target.value), parseTime(eventData.time).seconds, parseTime(eventData.time).ms)}
+                                          >
+                                            {Array.from({ length: 60 }, (_, i) => (<option key={i} value={i}>{i}</option>))}
+                                          </select>
+                                          <span className="text-[8px] font-black mt-1 uppercase text-slate-300 tracking-tighter">min</span>
+                                        </div>
+                                        <span className="text-lg font-black text-slate-200">:</span>
+                                        <div className="flex flex-col items-center">
+                                          <select
+                                            className="border border-slate-100 rounded-lg p-2 text-lg font-black bg-slate-50 w-16 outline-none focus:border-blue-600 transition-all appearance-none text-center"
+                                            value={parseTime(eventData.time).seconds}
+                                            onChange={(e) => updateTime(evt.id, parseTime(eventData.time).minutes, parseInt(e.target.value), parseTime(eventData.time).ms)}
+                                          >
+                                            {Array.from({ length: 60 }, (_, i) => (<option key={i} value={i}>{i}</option>))}
+                                          </select>
+                                          <span className="text-[8px] font-black mt-1 uppercase text-slate-300 tracking-tighter">seg</span>
+                                        </div>
+                                        <span className="text-lg font-black text-slate-200">.</span>
+                                        <div className="flex flex-col items-center">
+                                          <select
+                                            className="border border-slate-100 rounded-lg p-2 text-lg font-black bg-slate-50 w-16 outline-none focus:border-blue-600 transition-all appearance-none text-center"
+                                            value={parseTime(eventData.time).ms}
+                                            onChange={(e) => updateTime(evt.id, parseTime(eventData.time).minutes, parseTime(eventData.time).seconds, parseInt(e.target.value))}
+                                          >
+                                            {Array.from({ length: 100 }, (_, i) => (<option key={i} value={i}>{String(i).padStart(2, '0')}</option>))}
+                                          </select>
+                                          <span className="text-[8px] font-black mt-1 uppercase text-slate-300 tracking-tighter">mil</span>
+                                        </div>
                                       </div>
                                     </div>
 
-                                    {/* Result Time Selection (New) */}
-                                    <div className="flex gap-2 items-center bg-blue-50/50 p-2 rounded-lg border border-blue-100">
-                                      <div className="flex flex-col">
-                                        <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Min (Res)</label>
-                                        <select
-                                          className="border border-blue-200 rounded p-2 text-sm w-16 bg-white"
-                                          value={parseTime(eventData.resultTime).minutes}
-                                          onChange={(e) => updateResult(evt.id, parseInt(e.target.value), parseTime(eventData.resultTime).seconds, parseTime(eventData.resultTime).ms)}
-                                        >
-                                          {Array.from({ length: 60 }, (_, i) => (
-                                            <option key={i} value={i}>{i}</option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                      <span className="text-lg font-bold mt-5 text-blue-400">:</span>
-                                      <div className="flex flex-col">
-                                        <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Seg (Res)</label>
-                                        <select
-                                          className="border border-blue-200 rounded p-2 text-sm w-16 bg-white"
-                                          value={parseTime(eventData.resultTime).seconds}
-                                          onChange={(e) => updateResult(evt.id, parseTime(eventData.resultTime).minutes, parseInt(e.target.value), parseTime(eventData.resultTime).ms)}
-                                        >
-                                          {Array.from({ length: 60 }, (_, i) => (
-                                            <option key={i} value={i}>{i}</option>
-                                          ))}
-                                        </select>
-                                      </div>
-                                      <span className="text-lg font-bold mt-5 text-blue-400">.</span>
-                                      <div className="flex flex-col">
-                                        <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-1">Mil</label>
-                                        <select
-                                          className="border border-blue-200 rounded p-2 text-sm w-16 bg-white"
-                                          value={parseTime(eventData.resultTime).ms}
-                                          onChange={(e) => updateResult(evt.id, parseTime(eventData.resultTime).minutes, parseTime(eventData.resultTime).seconds, parseInt(e.target.value))}
-                                        >
-                                          {Array.from({ length: 100 }, (_, i) => (
-                                            <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
-                                          ))}
-                                        </select>
+                                    <div className="hidden md:block w-px h-10 bg-slate-100"></div>
+
+                                    {/* Result Time Selection (Si existe) */}
+                                    <div className="space-y-3 w-full md:w-auto">
+                                      <label className="block text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] text-center">Tiempo Final (Post-Comp)</label>
+                                      <div className="flex gap-2 items-center justify-center">
+                                        <div className="flex flex-col items-center">
+                                          <select
+                                            className="border border-blue-50 rounded-lg p-2 text-sm font-black bg-blue-50/50 text-blue-600 w-14 outline-none appearance-none text-center"
+                                            value={parseTime(eventData.resultTime).minutes}
+                                            onChange={(e) => updateResult(evt.id, parseInt(e.target.value), parseTime(eventData.resultTime).seconds, parseTime(eventData.resultTime).ms)}
+                                          >
+                                            {Array.from({ length: 60 }, (_, i) => (<option key={i} value={i}>{i}</option>))}
+                                          </select>
+                                        </div>
+                                        <span className="text-sm font-black text-blue-200">:</span>
+                                        <div className="flex flex-col items-center">
+                                          <select
+                                            className="border border-blue-50 rounded-lg p-2 text-sm font-black bg-blue-50/50 text-blue-600 w-14 outline-none appearance-none text-center"
+                                            value={parseTime(eventData.resultTime).seconds}
+                                            onChange={(e) => updateResult(evt.id, parseTime(eventData.resultTime).minutes, parseInt(e.target.value), parseTime(eventData.resultTime).ms)}
+                                          >
+                                            {Array.from({ length: 60 }, (_, i) => (<option key={i} value={i}>{i}</option>))}
+                                          </select>
+                                        </div>
+                                        <span className="text-sm font-black text-blue-200">.</span>
+                                        <div className="flex flex-col items-center">
+                                          <select
+                                            className="border border-blue-50 rounded-lg p-2 text-sm font-black bg-blue-50/50 text-blue-600 w-14 outline-none appearance-none text-center"
+                                            value={parseTime(eventData.resultTime).ms}
+                                            onChange={(e) => updateResult(evt.id, parseTime(eventData.resultTime).minutes, parseTime(eventData.resultTime).seconds, parseInt(e.target.value))}
+                                          >
+                                            {Array.from({ length: 100 }, (_, i) => (<option key={i} value={i}>{String(i).padStart(2, '0')}</option>))}
+                                          </select>
+                                        </div>
                                       </div>
                                     </div>
                                   </div>
@@ -568,22 +604,22 @@ export default function ConvocatoriaInscripcion() {
         )}
       </div>
 
-      {/* Action Buttons */}
+      {/* Action Buttons - Clean Modern */}
       {!profileIncomplete && (
-        <div className="flex gap-3">
+        <div className="flex flex-col md:flex-row gap-6 p-10 bg-slate-900 border border-slate-800 rounded-[3rem] shadow-xl shadow-slate-200/50">
           <button
             onClick={() => handleSave(false)}
             disabled={saving}
-            className="flex-1 bg-gray-600 text-white py-3 rounded-lg font-bold hover:bg-gray-700 disabled:opacity-50"
+            className="flex-1 bg-white/10 hover:bg-white/20 text-white py-8 rounded-2xl font-black text-xl border border-white/20 transition-all active:scale-[0.98] disabled:opacity-50 uppercase tracking-widest"
           >
-            {saving ? "Guardando..." : "Guardar Borrador"}
+            {saving ? "Guardando..." : "1. Guardar Borrador"}
           </button>
           <button
             onClick={() => handleSave(true)}
             disabled={saving}
-            className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50"
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-8 rounded-2xl font-black text-xl shadow-xl shadow-blue-500/25 transition-all active:scale-[0.98] disabled:opacity-50 uppercase tracking-widest border border-blue-500"
           >
-            {saving ? "Enviando..." : "Enviar Inscripción"}
+            {saving ? "Enviando..." : "2. Enviar Inscripción"}
           </button>
         </div>
       )}

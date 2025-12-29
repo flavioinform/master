@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useContext } from "react";
 import { supabase } from "@/lib/supabase";
 import { AppContext } from "@/context/AppContext";
 import { sendAdminNotification } from "@/lib/email";
+import { DollarSign, FileText, Inbox, Clock, ChevronDown } from "lucide-react";
 
 const MESES = [
   { n: 1, name: "Enero" }, { n: 2, name: "Febrero" }, { n: 3, name: "Marzo" },
@@ -35,6 +36,23 @@ export default function Vouchers() {
   const [mesFiltro, setMesFiltro] = useState("todos"); // todos | 1 | 2 ... 12
   const [planCuotas, setPlanCuotas] = useState(1);
 
+  // ========== MES Y AÑO PARA PAGOS MENSUALES ==========
+  // Para la visualización de "Cuota Mensual" en grid de 12 meses
+  const [anioVisual, setAnioVisual] = useState(new Date().getFullYear());
+  const aniosDisponibles = useMemo(() => {
+    return Array.from({ length: 33 }, (_, i) => 2008 + i);
+  }, []);
+
+  // ✅ NUEVOS ESTADOS PARA PAGO MULTIPLE
+  const [multiCuotas, setMultiCuotas] = useState(false);
+  const [numCuotasAPagar, setNumCuotasAPagar] = useState(1);
+  const [mesesCalculados, setMesesCalculados] = useState([]);
+
+  // ✅ PERFIL DEL USUARIO (para filtrar por fecha de ingreso)
+  const [userProfile, setUserProfile] = useState(null);
+
+
+
 
   const load = async () => {
     setLoading(true);
@@ -42,6 +60,19 @@ export default function Vouchers() {
     setTipo("");
 
     try {
+      // 0) Cargar perfil del usuario (para obtener fecha de ingreso)
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("fecha_ingreso")
+        .eq("id", user.id)
+        .single();
+
+      if (profileError) {
+        console.warn("No se pudo cargar el perfil:", profileError);
+      } else {
+        setUserProfile(profile);
+      }
+
       // 1) Periodos activos
       const { data: ps, error: e1 } = await supabase
         .from("payment_periods")
@@ -58,7 +89,7 @@ export default function Vouchers() {
         const ids = list.map((p) => p.id);
         const { data: vs, error: e2 } = await supabase
           .from("vouchers")
-          .select("id, period_id, archivo_path, estado, comentario, created_at, updated_at, cuota_numero, total_cuotas")
+          .select("id, period_id, archivo_path, estado, comentario, created_at, updated_at, cuota_numero, total_cuotas, mes, anio")
           .eq("user_id", user.id)
           .in("period_id", ids)
           .order("cuota_numero", { ascending: true });
@@ -89,10 +120,45 @@ export default function Vouchers() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
-  // ✅ PERIODOS FILTRADOS
+  // ✅ PERIODOS FILTRADOS (con filtro por fecha de ingreso)
   const periodosFiltrados = useMemo(() => {
     let list = periodos;
 
+    // Filtrar por fecha de ingreso del usuario
+    if (userProfile?.fecha_ingreso) {
+      const fechaIngreso = new Date(userProfile.fecha_ingreso);
+      const mesIngreso = fechaIngreso.getMonth() + 1; // 1-12
+      const anioIngreso = fechaIngreso.getFullYear();
+
+      list = list.filter(periodo => {
+        // Extraer año del nombre del periodo (ej: "Cuota Mensual 2024" -> 2024)
+        const matchAnio = periodo.nombre?.match(/\b(20\d{2})\b/);
+        const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : null;
+
+        // Si no tiene año en el nombre, permitirlo (periodos genéricos)
+        if (!anioPeriodo) return true;
+
+        // Si el periodo es de un año anterior al ingreso, no mostrarlo
+        if (anioPeriodo < anioIngreso) return false;
+
+        // Si es del mismo año, verificar el mes
+        if (anioPeriodo === anioIngreso) {
+          // Extraer mes del nombre (ej: "Enero 2024" -> 1)
+          const mesMatch = periodo.nombre?.toLowerCase().match(/enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre/);
+          if (mesMatch) {
+            const mesPeriodo = MESES.find(m => m.name.toLowerCase() === mesMatch[0])?.n;
+            if (mesPeriodo && mesPeriodo < mesIngreso) {
+              return false; // Mes anterior al ingreso
+            }
+          }
+        }
+
+        // Si es de un año posterior o mismo año/mes válido, mostrarlo
+        return true;
+      });
+    }
+
+    // Aplicar filtros de categoría
     if (catFiltro === "mensual") {
       list = list.filter(p => p.concepto?.toLowerCase().includes("mensual") || p.nombre?.toLowerCase().match(/enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre/i));
       if (mesFiltro !== "todos") {
@@ -104,13 +170,70 @@ export default function Vouchers() {
     }
 
     return list;
-  }, [periodos, catFiltro, mesFiltro]);
+  }, [periodos, catFiltro, mesFiltro, userProfile]);
 
   // Vouchers del periodo seleccionado
   const vouchersActuales = useMemo(() => {
     if (!periodoSel) return [];
     return misVouchersMap.get(periodoSel.id) || [];
-  }, [misVouchersMap, periodoSel]);
+  }, [periodoSel, misVouchersMap]);
+
+  // ✅ EFECTO PARA CALCULAR CUOTAS EN MODO MULTI
+  useEffect(() => {
+    if (!multiCuotas || !periodoSel) {
+      setMesesCalculados([]);
+      return;
+    }
+
+    const esMensual = periodoSel.concepto?.toLowerCase().includes("mensual") || periodoSel.nombre?.toLowerCase().includes("mensual");
+    const totalC = periodoSel.total_cuotas || 1;
+
+    if (esMensual) {
+      // Identificar el primer mes pendiente en el año visual (o el siguiente)
+      const pagados = vouchersActuales.filter(v => v.anio === anioVisual).map(v => v.mes);
+      let primerMesPendiente = 1;
+      for (let m = 1; m <= 12; m++) {
+        if (!pagados.includes(m)) {
+          primerMesPendiente = m;
+          break;
+        }
+      }
+
+      const nuevosMeses = [];
+      let currMes = primerMesPendiente;
+      let currAnio = anioVisual;
+
+      for (let i = 0; i < numCuotasAPagar; i++) {
+        nuevosMeses.push({ mes: currMes, anio: currAnio });
+        currMes++;
+        if (currMes > 12) {
+          currMes = 1;
+          currAnio++;
+        }
+      }
+      setMesesCalculados(nuevosMeses);
+    } else {
+      // Lógica de cuotas genéricas
+      const pagadas = vouchersActuales.map(v => v.cuota_numero);
+      let proximaCuota = 1;
+      for (let i = 1; i <= totalC; i++) {
+        if (!pagadas.includes(i)) {
+          proximaCuota = i;
+          break;
+        }
+      }
+
+      const nuevasCuotas = [];
+      for (let i = 0; i < numCuotasAPagar; i++) {
+        const nro = proximaCuota + i;
+        if (nro <= totalC) {
+          nuevasCuotas.push({ nro });
+        }
+      }
+      setMesesCalculados(nuevasCuotas);
+    }
+
+  }, [multiCuotas, numCuotasAPagar, periodoSel, vouchersActuales, anioVisual]);
 
   // Determinar el "Plan" actual (cuántas cuotas son en total)
   // Si ya existen vouchers, tomamos 'total_cuotas' del primero.
@@ -122,7 +245,7 @@ export default function Vouchers() {
     return planCuotas;
   }, [vouchersActuales, planCuotas]);
 
-  const subir = async (nroCuota) => {
+  const subir = async (nroCuota, customMes = null, customAnio = null, cuotasArray = null) => {
     setMsg("");
     setTipo("");
 
@@ -135,10 +258,11 @@ export default function Vouchers() {
 
     try {
       setSubiendo(true);
-      setCuotaSubiendo(nroCuota);
+      setCuotaSubiendo(cuotasArray ? "multi" : nroCuota);
 
       const ext = file.name.split(".").pop()?.toLowerCase() || "bin";
-      const path = `${user.id}/${periodoSel.id}/c${nroCuota}_${crypto.randomUUID()}.${ext}`;
+      const pathPart = cuotasArray ? `multi_${Date.now()}` : (customAnio && customMes ? `${customAnio}/${customMes}` : `c${nroCuota}`);
+      const path = `${user.id}/${periodoSel.id}/${pathPart}_${crypto.randomUUID()}.${ext}`;
 
       // 1) Subir
       const { error: upErr } = await supabase.storage
@@ -148,50 +272,80 @@ export default function Vouchers() {
       if (upErr) throw upErr;
 
       // 2) Insertar o actualizar
-      // Buscamos si ya existe voucher para esta cuota
-      const existente = vouchersActuales.find((v) => v.cuota_numero === nroCuota);
-
-      if (!existente) {
-        const { error: insErr } = await supabase.from("vouchers").insert({
-          user_id: user.id,
-          period_id: periodoSel.id,
-          archivo_path: path,
-          estado: "pendiente",
-          cuota_numero: nroCuota,
-          total_cuotas: totalCuotasDefinido
-        });
-        if (insErr) throw insErr;
+      let listaCuotas = [];
+      if (cuotasArray) {
+        listaCuotas = cuotasArray.map(c => ({
+          nro: c.nro || null,
+          mes: c.mes || null,
+          anio: c.anio || null
+        }));
       } else {
-        const { error: upErr2 } = await supabase
-          .from("vouchers")
-          .update({
+        // Para pagos mensuales: nro debe ser null, solo usar mes/anio
+        // Para pagos por cuotas: mes/anio deben ser null, solo usar nro
+        listaCuotas = [{
+          nro: (customMes && customAnio) ? null : nroCuota,
+          mes: customMes || null,
+          anio: customAnio || null
+        }];
+      }
+
+      const insertPromises = listaCuotas.map(c => {
+        const existente = c.mes && c.anio
+          ? vouchersActuales.find(v => v.mes === c.mes && v.anio === c.anio)
+          : vouchersActuales.find(v => v.cuota_numero === c.nro);
+
+        if (!existente) {
+          const insertData = {
+            user_id: user.id,
+            period_id: periodoSel.id,
+            archivo_path: path,
+            estado: "pendiente",
+            cuota_numero: c.nro || null,
+            total_cuotas: totalCuotasDefinido,
+            mes: c.mes || null,
+            anio: c.anio || null
+          };
+          return supabase.from("vouchers").insert(insertData);
+        } else {
+          const updateData = {
             archivo_path: path,
             estado: "pendiente",
             comentario: null,
             revisado_por: null,
-            total_cuotas: totalCuotasDefinido // Asegurar consistencia
-          })
-          .eq("id", existente.id);
-        if (upErr2) throw upErr2;
-      }
+            total_cuotas: totalCuotasDefinido
+          };
+          return supabase.from("vouchers").update(updateData).eq("id", existente.id);
+        }
+      });
+
+      const results = await Promise.all(insertPromises);
+      const errRes = results.find(r => r.error);
+      if (errRes) throw errRes.error;
 
       setFile(null);
-      setMsg(`¡Cuota ${nroCuota} subida exitosamente!`);
+      setMsg(cuotasArray ? `¡${cuotasArray.length} cuota(s) subida(s) exitosamente!` : `¡Cuota ${nroCuota} subida exitosamente!`);
       setTipo("success");
+      setMultiCuotas(false);
 
       // Notificación al Admin
       try {
+        const detalle = cuotasArray
+          ? `${cuotasArray.length} cuotas (${cuotasArray[0].mes}/${cuotasArray[0].anio} en adelante)`
+          : (customMes && customAnio
+            ? `Mes: ${MESES[customMes - 1].name} ${customAnio}`
+            : `Cuota ${nroCuota}`);
+
         await sendAdminNotification("template_voucher", {
-          from_name: user.nombre || "Usuario",
+          from_name: user.nombre_completo || user.nombre || "Usuario",
           from_email: user.email || "No disponible",
-          message: `Nuevo comprobante subido para ${periodoSel.concepto} (${periodoSel.nombre}) - Cuota ${nroCuota}.`,
+          message: `Nuevo comprobante subido para ${periodoSel.concepto} (${periodoSel.nombre}) - ${detalle}.`,
           type: "Validación de Pago"
         });
       } catch (emailErr) {
         console.warn("No se pudo enviar notificación por email:", emailErr);
       }
 
-      await load(); // Recargar para ver cambios
+      await load();
     } catch (err) {
       console.error(err);
       setMsg("Error al subir comprobante.");
@@ -215,105 +369,136 @@ export default function Vouchers() {
     window.open(data.signedUrl, "_blank");
   };
 
-  // Renderizar las tarjetas de cuotas
+  // Renderizar las tarjetas de cuotas - SENIOR PRO
   const renderCuotas = () => {
     const slots = [];
-    const montoTotal = periodoSel?.monto || 0;
-    const montoCuota = Math.ceil(montoTotal / totalCuotasDefinido);
+    const esCuotaMensual = periodoSel?.concepto?.toLowerCase().includes("mensual") || periodoSel?.nombre?.toLowerCase().includes("mensual");
 
-    for (let i = 1; i <= totalCuotasDefinido; i++) {
-      const voucher = vouchersActuales.find((v) => v.cuota_numero === i);
+    let iteraciones = esCuotaMensual ? 12 : totalCuotasDefinido;
+    let mesInicio = 1; // Por defecto, empezar desde Enero
+
+    // Si es pago mensual y el usuario tiene fecha de ingreso, filtrar
+    if (esCuotaMensual && userProfile?.fecha_ingreso) {
+      const fechaIngreso = new Date(userProfile.fecha_ingreso);
+      const mesIngreso = fechaIngreso.getMonth() + 1; // 1-12
+      const anioIngreso = fechaIngreso.getFullYear();
+
+      // Si estamos viendo el año de ingreso, empezar desde el mes de ingreso
+      if (anioVisual === anioIngreso) {
+        mesInicio = mesIngreso;
+      }
+      // Si estamos viendo un año anterior al ingreso, no mostrar nada
+      else if (anioVisual < anioIngreso) {
+        return (
+          <div className="col-span-full text-center py-12">
+            <p className="text-slate-400 font-bold text-lg">
+              No puedes pagar meses anteriores a tu fecha de ingreso
+            </p>
+          </div>
+        );
+      }
+    }
+
+    const montoCuota = esCuotaMensual ? (periodoSel?.monto || 0) : Math.ceil((periodoSel?.monto || 0) / (totalCuotasDefinido || 1));
+
+    for (let i = mesInicio; i <= iteraciones; i++) {
+      const voucher = esCuotaMensual
+        ? vouchersActuales.find(v => v.mes === i && v.anio === anioVisual)
+        : vouchersActuales.find(v => v.cuota_numero === i);
+
       const isUploadingThis = cuotaSubiendo === i;
+      const label = esCuotaMensual ? MESES[i - 1].name.toUpperCase() : `CUOTA ${i} DE ${totalCuotasDefinido}`;
 
-      let estadoColor = "bg-gray-100 text-gray-500";
-      let estadoTexto = "PENDIENTE DE PAGO";
+      let estadoColor = "bg-slate-100 text-slate-400 border-slate-200";
+      let estadoTexto = "PENDIENTE";
       if (voucher) {
-        if (voucher.estado === "pendiente") { estadoColor = "bg-yellow-100 text-yellow-800"; estadoTexto = "EN REVISIÓN"; }
-        if (voucher.estado === "aprobado") { estadoColor = "bg-green-100 text-green-800"; estadoTexto = "APROBADO"; }
-        if (voucher.estado === "rechazado") { estadoColor = "bg-red-100 text-red-800"; estadoTexto = "RECHAZADO"; }
+        if (voucher.estado === "pendiente") { estadoColor = "bg-amber-100 text-amber-700 border-amber-500 shadow-sm"; estadoTexto = "EN REVISIÓN"; }
+        if (voucher.estado === "aprobado") { estadoColor = "bg-emerald-100 text-emerald-700 border-emerald-500 shadow-sm"; estadoTexto = "APROBADO"; }
+        if (voucher.estado === "rechazado") { estadoColor = "bg-rose-100 text-rose-700 border-rose-500 shadow-sm"; estadoTexto = "RECHAZADO"; }
       }
 
       slots.push(
-        <div key={i} className="bg-white border rounded-xl p-5 shadow-sm">
-          <div className="flex justify-between items-start mb-3">
-            <div>
-              <h4 className="font-bold text-lg text-gray-800">Cuota {i} de {totalCuotasDefinido}</h4>
-              <p className="text-blue-600 font-semibold">${montoCuota.toLocaleString()}</p>
+        <div key={i} className={`bg-white border rounded-[2rem] p-6 md:p-8 transition-all shadow-sm hover:shadow-md flex flex-col justify-between min-h-[300px] group ${voucher?.estado === 'aprobado' ? 'border-emerald-100 bg-emerald-50/10' : 'border-slate-100 hover:border-blue-200'}`}>
+          <div className="space-y-6">
+            <div className="flex justify-between items-start gap-4">
+              <h4 className="font-black text-xl text-slate-900 leading-tight uppercase tracking-tight">{label}</h4>
+              <span className={`text-[10px] font-black px-3 py-1.5 rounded-lg border uppercase tracking-widest whitespace-nowrap ${estadoColor}`}>
+                {estadoTexto}
+              </span>
             </div>
-            <span className={`text-xs font-bold px-3 py-1 rounded-full ${estadoColor}`}>
-              {estadoTexto}
-            </span>
+
+            <div className="flex items-baseline gap-1">
+              <span className="text-sm font-bold text-blue-400">$</span>
+              <p className="text-3xl font-black text-slate-900 font-mono tracking-tight">{montoCuota.toLocaleString()}</p>
+            </div>
           </div>
 
-          {/* Si ya hay voucher, mostrar acciones */}
-          {voucher ? (
-            <div className="space-y-3">
-              {voucher.comentario && (
-                <p className="text-sm bg-red-50 text-red-700 p-2 rounded">
-                  ⚠️ {voucher.comentario}
-                </p>
-              )}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => verArchivo(voucher.archivo_path)}
-                  className="flex-1 bg-gray-800 text-white py-2 rounded text-sm hover:bg-gray-900"
-                >
-                  Ver Comprobante
-                </button>
-                {/* Permitir re-subir si está rechazado o pendiente? Digamos que siempre se puede corregir */}
-                <label className="flex-1 bg-blue-50 text-blue-700 py-2 rounded text-sm text-center cursor-pointer border border-blue-200 hover:bg-blue-100">
-                  {isUploadingThis ? "Subiendo..." : "Corregir"}
-                  <input type="file" className="hidden" accept="image/*,application/pdf"
+          <div className="mt-8">
+            {voucher ? (
+              <div className="space-y-4">
+                {voucher.comentario && (
+                  <div className="bg-rose-50 text-rose-600 p-4 rounded-xl border border-rose-100 text-xs font-bold uppercase tracking-wider">
+                    {voucher.comentario}
+                  </div>
+                )}
+                <div className="grid grid-cols-1 gap-3">
+                  <button
+                    onClick={() => verArchivo(voucher.archivo_path)}
+                    className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95"
+                  >
+                    Ver Comprobante
+                  </button>
+                  <label className="w-full bg-slate-50 text-slate-500 py-3 rounded-xl text-[10px] font-black uppercase text-center cursor-pointer border border-slate-100 hover:bg-slate-100 transition-all active:scale-95">
+                    {isUploadingThis ? "Subiendo..." : "Cambiar Archivo"}
+                    <input type="file" className="hidden" accept="image/*,application/pdf"
+                      onChange={(e) => {
+                        setFile(e.target.files?.[0]);
+                      }}
+                    />
+                  </label>
+                </div>
+                {file && !cuotaSubiendo && (
+                  <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl animate-in zoom-in-95">
+                    <p className="text-[10px] font-bold text-blue-600 truncate mb-3 italic">{file.name}</p>
+                    <button
+                      onClick={() => esCuotaMensual ? subir(i, i, anioVisual) : subir(i)}
+                      className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-500/20"
+                    >
+                      Confirmar Subida
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-100 bg-slate-50/50 rounded-2xl cursor-pointer hover:bg-white hover:border-blue-400 transition-all group overflow-hidden relative">
+                  <div className="text-center p-6 group-hover:scale-110 transition-transform">
+                    <FileText className="h-6 w-6 text-slate-300 mx-auto mb-2" />
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subir Ahora</p>
+                  </div>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*,application/pdf"
                     onChange={(e) => {
                       setFile(e.target.files?.[0]);
-                      // Truco: UX instantánea
                     }}
                   />
                 </label>
+                {file && !cuotaSubiendo && (
+                  <div className="mt-4 p-5 bg-blue-50 border border-blue-100 rounded-2xl animate-in fade-in slide-in-from-bottom-2">
+                    <p className="text-[10px] font-bold text-blue-600 truncate mb-4 italic">{file.name}</p>
+                    <button
+                      onClick={() => esCuotaMensual ? subir(i, i, anioVisual) : subir(i)}
+                      className="w-full bg-blue-600 text-white py-4 rounded-xl text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+                    >
+                      Enviar Cuota {i}
+                    </button>
+                  </div>
+                )}
               </div>
-              {/* Si seleccionó archivo para CORREGIR est cuota específica */}
-              {file && !cuotaSubiendo && (
-                <div className="mt-2 text-center">
-                  <p className="text-xs text-gray-500 mb-1">{file.name}</p>
-                  <button
-                    onClick={() => subir(i)}
-                    className="bg-blue-600 text-white px-4 py-1 rounded text-sm"
-                  >
-                    Confirmar subida Cuota {i}
-                  </button>
-                </div>
-              )}
-            </div>
-          ) : (
-            // Aún no hay voucher (Pagar)
-            <div className="space-y-3">
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
-                <div className="text-center p-2">
-                  <span className="text-2xl text-gray-400">📷</span>
-                  <p className="text-xs text-gray-500 mt-1">Subir comprobante</p>
-                </div>
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="image/*,application/pdf"
-                  onChange={(e) => {
-                    setFile(e.target.files?.[0]);
-                  }}
-                />
-              </label>
-              {file && !cuotaSubiendo && (
-                <div className="mt-2 text-center">
-                  <p className="text-xs text-gray-500 mb-1">{file.name}</p>
-                  <button
-                    onClick={() => subir(i)}
-                    className="w-full bg-green-600 text-white py-2 rounded text-sm hover:bg-green-700 font-bold"
-                  >
-                    Enviar Cuota {i}
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       );
     }
@@ -323,64 +508,79 @@ export default function Vouchers() {
   if (loading) return <div className="p-10 text-xl text-center">Cargando pagos...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-5xl mx-auto space-y-8">
+    <div className="min-h-screen bg-white p-4 md:p-10 font-sans">
+      <div className="max-w-6xl mx-auto space-y-12 animate-in fade-in duration-700">
 
-        {/* ENCABEZADO */}
-        <div className="bg-blue-900 text-white p-6 rounded-2xl shadow-lg">
-          <h1 className="text-3xl md:text-4xl font-bold mb-2">Mis Pagos y Comprobantes</h1>
-          <p className="text-lg md:text-xl opacity-90">
-            Gestiona tus pagos en cuotas de forma sencilla.
-          </p>
+        {/* ENCABEZADO - Clean Modern */}
+        <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 md:p-12 shadow-xl shadow-slate-200/50 text-white relative overflow-hidden">
+          <div className="relative z-10 space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
+              <p className="text-xs font-black text-blue-400 uppercase tracking-[0.3em]">Estado de Cuenta</p>
+            </div>
+            <h1 className="text-4xl md:text-6xl font-black mb-2 tracking-tight leading-none uppercase">
+              Mis Pagos
+            </h1>
+            <p className="text-lg md:text-xl font-medium text-slate-400 max-w-xl">
+              Gestiona tus comprobantes, revisa tus cuotas pendientes y mantén tu estado de socio al día.
+            </p>
+          </div>
+          <div className="absolute top-0 right-0 p-10 opacity-5 blur-sm scale-150 rotate-12">
+            <DollarSign className="w-64 h-64" />
+          </div>
         </div>
 
         {msg && (
-          <div className={`p-4 rounded-xl text-lg font-medium border-l-4 shadow-sm ${tipo === "error" ? "bg-red-50 border-red-600 text-red-900" : "bg-green-50 border-green-600 text-green-900"
-            }`}>
-            {msg}
+          <div className={`p-6 rounded-[1.5rem] border text-lg font-bold text-center animate-in zoom-in duration-300 ${tipo === "error" ? "bg-rose-50 border-rose-100 text-rose-700" : "bg-emerald-50 border-emerald-100 text-emerald-700"}`}>
+            {msg.toUpperCase()}
           </div>
         )}
 
-        {/* PASO 1: SELECCIÓN */}
-        <section>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-3">
-              <div className="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold">1</div>
-              <h2 className="text-2xl font-bold text-gray-800">Selecciona el Pago</h2>
+        {/* PASO 1: SELECCIÓN - Clean Modern */}
+        <section className="bg-slate-50/50 border border-slate-100 rounded-[3rem] p-8 md:p-10 space-y-10">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-8">
+            <div className="flex items-center gap-6">
+              <div className="bg-slate-900 text-white w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-lg">1</div>
+              <div className="space-y-1">
+                <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tight">Selección de Cobro</h2>
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">¿Qué deseas pagar hoy?</p>
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-2 items-center">
-              {/* Filtros de Categoría */}
-              <div className="flex gap-1 bg-white p-1 rounded-xl border shadow-sm">
+            <div className="flex flex-wrap gap-4 items-center">
+              {/* Filtros de Categoría - Clean Modern */}
+              <div className="flex gap-1 bg-white p-1.5 rounded-2xl border border-slate-100 shadow-sm">
                 {["todas", "mensual", "anual"].map(c => (
                   <button
                     key={c}
                     onClick={() => { setCatFiltro(c); setMesFiltro("todos"); }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition ${catFiltro === c ? 'bg-blue-600 text-white shadow-md' : 'text-gray-500 hover:bg-gray-50'}`}
+                    className={`px-6 py-3 rounded-xl text-xs font-black uppercase transition-all ${catFiltro === c ? 'bg-slate-900 text-white shadow-md' : 'text-slate-400 hover:text-slate-600'}`}
                   >
-                    {c === "todas" ? "Todos" : c === "mensual" ? "Mensuales" : "Anuales"}
+                    {c === "todas" ? "Todos" : c === "mensual" ? "Mensual" : "Anual"}
                   </button>
                 ))}
               </div>
 
-              {/* Filtro de Mes (solo si es mensual) */}
+              {/* Filtro de Mes - Clean Modern */}
               {catFiltro === "mensual" && (
-                <select
-                  className="border rounded-xl px-3 py-1.5 text-xs font-bold bg-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                  value={mesFiltro}
-                  onChange={e => setMesFiltro(e.target.value)}
-                >
-                  <option value="todos">Todos los meses</option>
-                  {MESES.map(m => <option key={m.n} value={m.n}>{m.name}</option>)}
-                </select>
+                <div className="relative">
+                  <select
+                    className="bg-white border border-slate-100 rounded-2xl px-6 py-4 text-xs font-black text-slate-900 outline-none cursor-pointer appearance-none pr-12 shadow-sm focus:border-blue-600 transition-all uppercase"
+                    value={mesFiltro}
+                    onChange={e => setMesFiltro(e.target.value)}
+                  >
+                    <option value="todos">Todos los meses</option>
+                    {MESES.map(m => <option key={m.n} value={m.n}>{m.name}</option>)}
+                  </select>
+                </div>
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {periodosFiltrados.length === 0 && (
-              <div className="col-span-full py-10 text-center bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300">
-                <p className="text-gray-500 font-medium italic">No se encontraron pagos activos en esta categoría.</p>
+              <div className="col-span-full py-24 text-center bg-white rounded-[2.5rem] border border-dashed border-slate-200">
+                <p className="text-xl text-slate-300 font-bold italic uppercase tracking-widest">No hay cobros activos para esta categoría</p>
               </div>
             )}
 
@@ -390,7 +590,6 @@ export default function Vouchers() {
 
               // Resumen de estado
               const pagadas = misVs.filter(v => v.estado === 'aprobado').length;
-              // Ojo: si no tiene vouchers, tomamos planCuotas (para vista previa) o 1
               const totalC = misVs.length > 0 ? misVs[0].total_cuotas : (isSelected ? planCuotas : 1);
               const avance = totalC > 0 ? Math.round((pagadas / totalC) * 100) : 0;
 
@@ -402,28 +601,47 @@ export default function Vouchers() {
                     setFile(null);
                     setMsg("");
                   }}
-                  className={`text-left p-5 rounded-2xl border-2 transition-all shadow-sm ${isSelected
-                    ? "border-blue-600 bg-blue-50 ring-2 ring-blue-300"
-                    : "border-gray-200 bg-white hover:border-blue-300"
+                  className={`text-left p-8 rounded-[2.5rem] border transition-all relative overflow-hidden group shadow-sm ${isSelected
+                    ? "border-blue-600 bg-blue-50/30 ring-4 ring-blue-500/5 shadow-blue-500/10"
+                    : "border-slate-100 bg-white hover:border-blue-200 hover:shadow-md hover:-translate-y-1"
                     }`}
                 >
-                  <h3 className="text-xl font-bold text-gray-900 mb-1">
-                    {p.concepto}
-                  </h3>
-                  <p className="text-gray-600 font-medium mb-3">{p.nombre}</p>
-                  <p className="text-2xl font-bold text-blue-700 mb-2">${p.monto.toLocaleString()}</p>
-
-                  {/* Barra de progreso simple */}
-                  <div className="w-full bg-gray-200 rounded-full h-2.5 mb-1">
-                    <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${avance}%` }}></div>
+                  <div className="space-y-4">
+                    <span className="bg-slate-50 text-slate-400 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-slate-100">{p.concepto}</span>
+                    <h3 className="text-xl font-black text-slate-900 group-hover:text-blue-700 transition-colors uppercase leading-tight tracking-tight">
+                      {p.nombre}
+                    </h3>
                   </div>
-                  <p className="text-xs text-gray-500 flex justify-between">
-                    {misVs.length > 0
-                      ? <span>{pagadas}/{totalC} aprobadas</span>
-                      : <span>Sin iniciar</span>
-                    }
-                    {avance === 100 && misVs.length > 0 && <span className="text-green-600 font-bold">¡COMPLETO!</span>}
-                  </p>
+
+                  <div className="my-6">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-sm font-bold text-blue-400">$</span>
+                      <p className="text-3xl font-black text-slate-900 font-mono tracking-tight">{p.monto.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  {/* Barra de progreso Clean Modern */}
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest">
+                      <span className="text-slate-400">
+                        {pagadas}/{totalC} Pagados
+                      </span>
+                      {avance === 100 && misVs.length > 0 ? (
+                        <span className="text-emerald-500 font-black">Completado ✓</span>
+                      ) : (
+                        <span className="text-blue-600">{avance}%</span>
+                      )}
+                    </div>
+                    <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                      <div className={`h-full transition-all duration-1000 ${avance === 100 ? 'bg-emerald-500' : 'bg-blue-600'}`} style={{ width: `${avance}%` }}></div>
+                    </div>
+                  </div>
+
+                  {isSelected && (
+                    <div className="absolute top-6 right-6 text-xl p-2 bg-blue-600 text-white rounded-xl shadow-lg animate-bounce">
+                      ↓
+                    </div>
+                  )}
                 </button>
               );
             })}
@@ -431,46 +649,183 @@ export default function Vouchers() {
         </section>
 
         {periodoSel && (
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
+          <div className="animate-in fade-in slide-in-from-bottom-8 duration-500 space-y-12">
 
-            {/* PASO 2: CONFIGURACIÓN (SOLO SI NO HAY PAGOS AÚN) */}
-            {vouchersActuales.length === 0 && (
-              <section className="bg-white p-6 rounded-2xl shadow-md border border-gray-100">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold">2</div>
-                  <h2 className="text-xl font-bold text-gray-800">Plan de Cuotas</h2>
+            {/* PASO 2: CONFIGURACIÓN - Clean Modern */}
+            {vouchersActuales.length === 0 && !periodoSel.concepto?.toLowerCase().includes("mensual") && (
+              <section className="bg-white border border-slate-100 p-8 md:p-10 rounded-[2.5rem] shadow-sm">
+                <div className="flex items-center gap-6 mb-10">
+                  <div className="bg-slate-900 text-white w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-lg">2</div>
+                  <div className="space-y-1">
+                    <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tight">Plan de Cuotas</h2>
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Configura tu forma de pago</p>
+                  </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-4 items-center bg-blue-50 p-4 rounded-xl">
-                  <label className="text-gray-700 font-medium">
-                    ¿En cuántas cuotas vas a pagar?
+                <div className="bg-blue-50/50 border border-blue-100 p-8 md:p-10 rounded-3xl space-y-8">
+                  <label className="text-xs font-black text-blue-900 uppercase tracking-[0.2em] block ml-1">
+                    Selecciona el número de cuotas:
                   </label>
-                  <select
-                    value={planCuotas}
-                    onChange={(e) => setPlanCuotas(Number(e.target.value))}
-                    className="p-3 pr-10 border-2 border-blue-200 rounded-lg font-bold text-lg focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(n => <option key={n} value={n}>{n} Cuota{n > 1 ? 's' : ''}</option>)}
-                  </select>
-                  <div className="text-sm text-blue-800 ml-auto font-medium">
-                    Pagarás <span className="font-bold text-lg">${Math.ceil(periodoSel.monto / planCuotas).toLocaleString()}</span> x {planCuotas} meses
+                  <div className="flex flex-col md:flex-row gap-6 items-center">
+                    <div className="relative w-full md:w-80">
+                      <select
+                        value={planCuotas}
+                        onChange={(e) => setPlanCuotas(Number(e.target.value))}
+                        className="w-full p-5 border border-slate-200 rounded-2xl font-black text-xl bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 outline-none transition-all appearance-none pr-12"
+                      >
+                        {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(n => <option key={n} value={n}>{n} {n > 1 ? 'Cuotas' : 'Cuota'}</option>)}
+                      </select>
+                      <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                        <ChevronDown className="h-5 w-5" />
+                      </div>
+                    </div>
+                    <div className="flex-1 w-full bg-white px-8 py-5 rounded-2xl border border-blue-100 shadow-sm flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Monto Mensual:</span>
+                      <span className="text-2xl font-black text-blue-600">${Math.ceil(periodoSel.monto / planCuotas).toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
               </section>
             )}
 
-            {/* PASO 3: GESTIÓN DE CUOTAS */}
-            <section className="bg-white p-6 rounded-2xl shadow-md border border-gray-100">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center font-bold">{vouchersActuales.length === 0 ? 3 : 2}</div>
-                <h2 className="text-xl font-bold text-gray-800">Tus Cuotas</h2>
+            {/* SELECCIÓN DE AÑO PARA CUOTAS MENSUALES - OCULTO PARA EVITAR CONFUSIÓN */}
+            {/* El año se determina automáticamente del nombre del periodo */}
+            {false && (periodoSel.concepto?.toLowerCase().includes("mensual") || periodoSel.nombre?.toLowerCase().includes("mensual")) && (
+              <section className="bg-white border border-slate-100 p-8 md:p-10 rounded-[2.5rem] shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+                  <div className="flex items-center gap-6">
+                    <div className="bg-slate-900 text-white w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-lg">2</div>
+                    <div className="space-y-1">
+                      <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tight">Periodo de Pago</h2>
+                      <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Filtra por año de emisión</p>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <Clock className="absolute left-6 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-300" />
+                    <select
+                      className="bg-slate-50 border border-slate-100 rounded-2xl pl-14 pr-12 py-4 text-sm font-black text-slate-900 outline-none cursor-pointer appearance-none shadow-sm focus:border-blue-600 focus:bg-white transition-all uppercase min-w-[200px]"
+                      value={anioVisual}
+                      onChange={e => setAnioVisual(Number(e.target.value))}
+                    >
+                      {aniosDisponibles.map(a => (
+                        <option key={a} value={a}>AÑO {a}</option>
+                      ))}
+                    </select>
+                    <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                      <ChevronDown className="h-5 w-5" />
+                    </div>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            {/* PASO 3: GESTIÓN DE CUOTAS - Clean Modern */}
+            <section className="bg-white border border-slate-100 p-8 md:p-10 rounded-[2.5rem] shadow-sm space-y-10">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+                <div className="flex items-center gap-6">
+                  <div className="bg-slate-900 text-white w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black shadow-lg">
+                    {vouchersActuales.length === 0 ? 3 : 2}
+                  </div>
+                  <div className="space-y-1">
+                    <h2 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-tight">Registro de Cuotas</h2>
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Sube tus comprobantes aquí</p>
+                  </div>
+                </div>
+
+                {/* Toggle Multi-pago (Solo si es mensual) */}
+                {(periodoSel.concepto?.toLowerCase().includes("mensual") || periodoSel.nombre?.toLowerCase().includes("mensual")) && (
+                  <button
+                    onClick={() => {
+                      setMultiCuotas(!multiCuotas);
+                      setFile(null);
+                    }}
+                    className={`flex items-center gap-3 px-8 py-4 rounded-2xl text-xs font-black border transition-all transform active:scale-95 shadow-sm ${multiCuotas
+                      ? "bg-blue-600 text-white border-blue-500 shadow-blue-600/20"
+                      : "bg-white text-slate-600 border-slate-200 hover:border-blue-600 hover:text-blue-600"
+                      }`}
+                  >
+                    <Inbox className="h-4 w-4" />
+                    {multiCuotas ? "Modo Individual" : "Pagar Varios Meses"}
+                  </button>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Interfaz de Multi-pago - Clean Modern */}
+              {multiCuotas && (
+                <div className="bg-blue-50/50 border border-blue-100 rounded-[2.5rem] p-8 md:p-10 animate-in zoom-in-95 duration-300 space-y-8">
+                  <div className="flex items-center gap-4 border-b border-blue-100 pb-6">
+                    <div className="p-3 bg-blue-600 text-white rounded-xl shadow-lg shadow-blue-600/20">
+                      <Inbox className="h-6 w-6" />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-xl font-black text-blue-900 uppercase tracking-tight">Pago Multifunción</h3>
+                      <p className="text-xs font-medium text-blue-600/60 uppercase tracking-widest">Sube un comprobante para varios meses</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
+                        1. Cantidad de cuotas
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="1"
+                          max="12"
+                          value={numCuotasAPagar}
+                          onChange={(e) => setNumCuotasAPagar(Math.max(1, Math.min(12, parseInt(e.target.value) || 1)))}
+                          className="w-full text-3xl p-6 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 font-black shadow-sm outline-none bg-white transition-all"
+                        />
+                        <div className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300 font-bold text-lg">MESES</div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
+                        2. Comprobante Único
+                      </label>
+                      <label className="flex flex-col items-center justify-center bg-white p-6 border-2 border-dashed border-blue-200 rounded-2xl cursor-pointer hover:bg-white hover:border-blue-600 transition-all shadow-sm group h-[100px]">
+                        <span className="text-xs font-black text-blue-600 uppercase text-center break-all opacity-80 group-hover:opacity-100">
+                          {file ? file.name : "Seleccionar archivo..."}
+                        </span>
+                        <input type="file" className="hidden" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0])} />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Preview de Meses */}
+                  {mesesCalculados.length > 0 && (
+                    <div className="bg-white border border-blue-100 p-6 rounded-2xl space-y-4 shadow-sm">
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-blue-400" /> Cubrirá los siguientes meses:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {mesesCalculados.map((m, i) => (
+                          <div key={i} className="bg-blue-50 px-4 py-2 rounded-xl border border-blue-100 text-sm font-bold text-blue-700 animate-in fade-in duration-300" style={{ animationDelay: `${i * 100}ms` }}>
+                            {MESES[m.mes - 1].name} {m.anio}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="pt-4">
+                    <button
+                      onClick={() => subir(0, 0, 0, mesesCalculados)}
+                      disabled={!file || subiendo}
+                      className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-lg hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/20 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest"
+                    >
+                      {subiendo ? "Procesando..." : `Confirmar Pago de ${numCuotasAPagar} Meses`}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {renderCuotas()}
               </div>
             </section>
-
           </div>
         )}
 

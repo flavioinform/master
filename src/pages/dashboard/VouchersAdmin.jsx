@@ -3,7 +3,23 @@ import { supabase } from "@/lib/supabase";
 import { AppContext } from "@/context/AppContext";
 import * as XLSX from "xlsx"; // ✅ Import XLSX
 
+import {
+  Calendar, DollarSign, User, Check, Clock, FileText, AlertCircle,
+  ShieldCheck, CheckCircle2, History, Settings, Search, Download,
+  CreditCard, Trash2, Edit, X, ChevronRight, Plus, Loader2,
+  Tag, Settings2, Eye, Inbox, MessageSquare, Upload
+} from "lucide-react";
 import ImportUsersModal from "@/components/ImportUsersModal";
+import master12Logo from "@/assets/galeria/master12.png";
+
+const MESES = [
+  { n: 1, name: "Enero" }, { n: 2, name: "Febrero" }, { n: 3, name: "Marzo" },
+  { n: 4, name: "Abril" }, { n: 5, name: "Mayo" }, { n: 6, name: "Junio" },
+  { n: 7, name: "Julio" }, { n: 8, name: "Agosto" }, { n: 9, name: "Septiembre" },
+  { n: 10, name: "Octubre" }, { n: 11, name: "Noviembre" }, { n: 12, name: "Diciembre" }
+];
+
+const RANGE_ANIOS = Array.from({ length: 33 }, (_, i) => 2008 + i); // 2008 to 2040
 
 export default function VouchersAdmin() {
   const { user } = useContext(AppContext);
@@ -41,12 +57,10 @@ export default function VouchersAdmin() {
   const [catFiltro, setCatFiltro] = useState("todas"); // todas | mensual | anual
   const [mesFiltro, setMesFiltro] = useState("todos"); // todos | 1 | 2 ... 12
 
-  const MESES = [
-    { n: 1, name: "Enero" }, { n: 2, name: "Febrero" }, { n: 3, name: "Marzo" },
-    { n: 4, name: "Abril" }, { n: 5, name: "Mayo" }, { n: 6, name: "Junio" },
-    { n: 7, name: "Julio" }, { n: 8, name: "Agosto" }, { n: 9, name: "Septiembre" },
-    { n: 10, name: "Octubre" }, { n: 11, name: "Noviembre" }, { n: 12, name: "Diciembre" }
-  ];
+  // ✅ Estado para creación de periodo (modificado)
+  const [anioCreacion, setAnioCreacion] = useState(new Date().getFullYear());
+
+
 
   // ✅ editar período
   const [editando, setEditando] = useState(null);
@@ -71,6 +85,8 @@ export default function VouchersAdmin() {
     period_id: "",
     cuota_numero: 1,
     total_cuotas: 1,
+    mes: null,
+    anio: new Date().getFullYear(),
     estado: "aprobado",
     comentario: "Registro manual admin",
     created_at: new Date().toISOString().slice(0, 10)
@@ -85,6 +101,8 @@ export default function VouchersAdmin() {
     setLoading(true);
     setMsg("");
     setTipo("");
+
+
 
     try {
       // 1) rol
@@ -127,7 +145,7 @@ export default function VouchersAdmin() {
       // Fetch ALL vouchers to be able to show history
       const { data: v, error: e2 } = await supabase
         .from("vouchers")
-        .select("id, user_id, period_id, archivo_path, estado, comentario, created_at, updated_at, cuota_numero, total_cuotas")
+        .select("id, user_id, period_id, archivo_path, estado, comentario, created_at, updated_at, cuota_numero, total_cuotas, monto_individual, mes, anio")
         .order("created_at", { ascending: false });
 
       if (e2) throw e2;
@@ -161,6 +179,193 @@ export default function VouchersAdmin() {
     } catch (err) {
       setMsg(err?.message || "Error inesperado.");
       setTipo("error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ✅ IMPORTAR EXCEL HISTÓRICO (Flexible)
+  const handleExcelImport = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Obtener nombre del archivo sin extensión
+    const nombreArchivo = file.name.replace(/\.[^/.]+$/, "");
+
+    // Pedir año
+    const anio = prompt("¿De qué año es este Excel histórico?", new Date().getFullYear());
+    if (!anio || isNaN(parseInt(anio))) {
+      alert("Año inválido");
+      e.target.value = '';
+      return;
+    }
+
+    // Pedir nombre del periodo (sugerir nombre del archivo)
+    const nombrePeriodo = prompt(
+      "¿Cómo se llama el periodo?\n(Presiona Enter para usar el nombre del archivo)",
+      nombreArchivo
+    );
+
+    if (!nombrePeriodo) {
+      e.target.value = '';
+      return;
+    }
+
+    const confirmImport = window.confirm(
+      `¿Confirmas importar este Excel?\n\nPeriodo: ${nombrePeriodo}\nAño: ${anio}`
+    );
+
+    if (!confirmImport) {
+      e.target.value = '';
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // Leer archivo Excel
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      console.log("📊 Datos del Excel:", jsonData);
+
+      if (jsonData.length === 0) {
+        alert("El archivo está vacío");
+        setLoading(false);
+        e.target.value = '';
+        return;
+      }
+
+      // Buscar periodo por nombre exacto
+      let { data: periodo, error: periodoError } = await supabase
+        .from("payment_periods")
+        .select("id")
+        .eq("nombre", nombrePeriodo)
+        .single();
+
+      // Si no existe, ofrecer crearlo
+      if (periodoError || !periodo) {
+        const confirmarCrear = window.confirm(
+          `No se encontró el periodo "${nombrePeriodo}".\n\n¿Deseas crearlo ahora?`
+        );
+
+        if (!confirmarCrear) {
+          alert("Importación cancelada. Crea el periodo primero en la sección de Periodos.");
+          e.target.value = '';
+          setLoading(false);
+          return;
+        }
+
+        // Crear periodo
+        const { data: nuevoPeriodo, error: createError } = await supabase
+          .from("payment_periods")
+          .insert({
+            nombre: nombrePeriodo,
+            monto: 0, // Se puede ajustar después
+            activo: true,
+            concepto: "Histórico"
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          alert("Error creando periodo: " + createError.message);
+          e.target.value = '';
+          setLoading(false);
+          return;
+        }
+
+        periodo = nuevoPeriodo;
+        console.log("✅ Periodo creado:", periodo);
+      } else {
+        console.log("✅ Periodo encontrado:", periodo);
+      }
+
+      // Procesar cada fila
+      let exitosos = 0;
+      let errores = 0;
+      const erroresDetalle = [];
+
+      for (const row of jsonData) {
+        try {
+          const rut = row.RUT?.toString().trim();
+          const monto = parseFloat(row.monto);
+
+          if (!rut || !monto || isNaN(monto)) {
+            console.warn("⚠️ Fila inválida:", row);
+            errores++;
+            erroresDetalle.push(`Fila inválida: ${JSON.stringify(row)}`);
+            continue;
+          }
+
+          // Buscar usuario por RUT
+          const { data: usuario, error: userError } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("rut", rut)
+            .single();
+
+          if (userError || !usuario) {
+            console.warn(`⚠️ Usuario no encontrado: ${rut}`);
+            errores++;
+            erroresDetalle.push(`Usuario no encontrado: ${rut}`);
+            continue;
+          }
+
+          // Insertar voucher
+          const { error: insertError } = await supabase
+            .from("vouchers")
+            .insert({
+              user_id: usuario.id,
+              period_id: periodo.id,
+              monto_individual: monto,
+              estado: "aprobado",
+              mes: null,
+              anio: parseInt(anio),
+              cuota_numero: null,
+              archivo_path: "excel-import/historico",
+              comentario: `Importado desde Excel: ${nombreArchivo}`,
+              revisado_por: user.id
+            });
+
+          if (insertError) {
+            console.error(`❌ Error insertando ${rut}:`, insertError);
+            errores++;
+            erroresDetalle.push(`Error insertando ${rut}: ${insertError.message}`);
+          } else {
+            exitosos++;
+            console.log(`✅ Importado: ${rut} - $${monto}`);
+          }
+        } catch (err) {
+          console.error("❌ Error procesando fila:", row, err);
+          errores++;
+          erroresDetalle.push(`Error procesando: ${JSON.stringify(row)}`);
+        }
+      }
+
+      // Mostrar resumen
+      let mensaje = `Importación completada:\n\n✅ ${exitosos} registros exitosos\n❌ ${errores} errores`;
+
+      if (erroresDetalle.length > 0 && erroresDetalle.length <= 10) {
+        mensaje += "\n\nErrores:\n" + erroresDetalle.slice(0, 10).join("\n");
+      } else if (erroresDetalle.length > 10) {
+        mensaje += "\n\n(Revisa la consola para ver todos los errores)";
+        console.log("Errores detallados:", erroresDetalle);
+      }
+
+      alert(mensaje);
+
+      // Recargar datos
+      await load();
+
+      // Limpiar input
+      e.target.value = '';
+    } catch (error) {
+      console.error("❌ Error leyendo Excel:", error);
+      alert("Error al leer el archivo Excel:\n" + error.message);
+      e.target.value = '';
     } finally {
       setLoading(false);
     }
@@ -231,20 +436,33 @@ export default function VouchersAdmin() {
     let rows = vouchers;
 
     // Filter by Year
+    // For monthly payments (with mes/anio fields), use anio field
+    // For installment payments, use created_at year
     rows = rows.filter(v => {
-      const pDate = v.payment_periods?.fecha_inicio || v.created_at;
+      // If it has anio field (monthly payment), use that
+      if (v.anio !== null && v.anio !== undefined) {
+        return parseInt(v.anio) === parseInt(anioHistorial);
+      }
+      // Otherwise use created_at
+      const pDate = v.created_at;
       if (!pDate) return false;
-      // ✅ Fix: Handle date string directly to avoid Timezone shift (e.g. 2024-01-01 -> 2023-12-31)
       const yearStr = String(pDate).split('-')[0];
       return parseInt(yearStr) === parseInt(anioHistorial);
     });
 
     // Filter by Month (Historial)
+    // For monthly payments (with mes field), use mes field
+    // For installment payments, use created_at month
     if (mesHistorial !== "todos") {
       rows = rows.filter(v => {
-        const pDate = v.payment_periods?.fecha_inicio || v.created_at;
+        // If it has mes field (monthly payment), use that
+        if (v.mes !== null && v.mes !== undefined) {
+          return parseInt(v.mes) === parseInt(mesHistorial);
+        }
+        // Otherwise use created_at
+        const pDate = v.created_at;
         if (!pDate) return false;
-        const month = new Date(pDate).getUTCMonth() + 1; // getUTCMonth is safer for ISO dates
+        const month = new Date(pDate).getUTCMonth() + 1;
         return month === parseInt(mesHistorial);
       });
     }
@@ -267,21 +485,44 @@ export default function VouchersAdmin() {
   const statsHistorial = useMemo(() => {
     // Todos los del año (independiente del mes seleccionado)
     const delAnio = vouchers.filter(v => {
-      const pDate = v.payment_periods?.fecha_inicio || v.created_at;
-      return v.estado === "aprobado" && pDate && String(pDate).split('-')[0] === String(anioHistorial);
+      if (v.estado !== "aprobado") return false;
+
+      // Use anio field if available (monthly payment), otherwise use created_at
+      if (v.anio !== null && v.anio !== undefined) {
+        return parseInt(v.anio) === parseInt(anioHistorial);
+      }
+
+      const pDate = v.created_at;
+      return pDate && String(pDate).split('-')[0] === String(anioHistorial);
     });
 
-    const totalAnual = delAnio.reduce((acc, v) => acc + (v.payment_periods?.monto || 0), 0);
+    // Use individual amount if it exists, otherwise use period amount
+    const totalAnual = delAnio.reduce((acc, v) => {
+      const monto = v.monto_individual !== undefined && v.monto_individual !== null
+        ? v.monto_individual
+        : (v.payment_periods?.monto || 0);
+      return acc + monto;
+    }, 0);
 
     // Solo del mes seleccionado (si es "todos", es igual al anual pero mejor mostrar por separado si aplica)
     let totalMensual = 0;
     if (mesHistorial !== "todos") {
       const delMes = delAnio.filter(v => {
-        const pDate = v.payment_periods?.fecha_inicio || v.created_at;
+        // Use mes field if available (monthly payment), otherwise use created_at
+        if (v.mes !== null && v.mes !== undefined) {
+          return parseInt(v.mes) === parseInt(mesHistorial);
+        }
+
+        const pDate = v.created_at;
         const m = new Date(pDate).getUTCMonth() + 1;
         return m === parseInt(mesHistorial);
       });
-      totalMensual = delMes.reduce((acc, v) => acc + (v.payment_periods?.monto || 0), 0);
+      totalMensual = delMes.reduce((acc, v) => {
+        const monto = v.monto_individual !== undefined && v.monto_individual !== null
+          ? v.monto_individual
+          : (v.payment_periods?.monto || 0);
+        return acc + monto;
+      }, 0);
     }
 
     return { totalAnual, totalMensual };
@@ -300,8 +541,10 @@ export default function VouchersAdmin() {
       "Nombre": v.profiles?.nombre_completo || "Desconocido",
       "Concepto": v.payment_periods?.concepto || "N/A",
       "Periodo": v.payment_periods?.nombre || "N/A",
-      "Monto": v.payment_periods?.monto || 0,
+      "Monto": v.monto_individual !== undefined && v.monto_individual !== null ? v.monto_individual : (v.payment_periods?.monto || 0),
       "Cuota": v.total_cuotas ? `${v.cuota_numero}/${v.total_cuotas}` : "Única",
+      "Mes Corresp.": v.mes ? MESES.find(m => m.n === v.mes)?.name : "N/A",
+      "Año Corresp.": v.anio || "N/A",
       "Estado": v.estado
     }));
 
@@ -314,18 +557,38 @@ export default function VouchersAdmin() {
 
   const crearPeriodo = async (e) => {
     e.preventDefault();
-    // ... same logic
-    setMsg(""); setTipo("");
-    if (!concepto || !nombre) { setMsg("Falta Concepto/Nombre"); setTipo("error"); return; }
-    if (monto === "" || Number(monto) < 0) { setMsg("Monto inválido"); setTipo("error"); return; }
+    setMsg("");
+    setTipo("");
+
+    if (!concepto || !monto) {
+      setMsg("Falta Concepto o Monto");
+      setTipo("error");
+      return;
+    }
+
+    // 1. Generar nombre automático
+    const anioVal = anioCreacion || new Date().getFullYear();
+    const nombreFinal = `${concepto} ${anioVal}`;
 
     const { error } = await supabase.from("payment_periods").insert({
-      concepto, nombre, descripcion: descripcion || null, fecha_inicio: new Date().toISOString(), // Use Current Date for ordering
-      monto: Number(monto), activo: true, created_by: user.id,
+      concepto,
+      nombre: nombreFinal,
+      descripcion: descripcion || null,
+      fecha_inicio: new Date().toISOString(),
+      monto: Number(monto),
+      activo: true,
+      created_by: user.id,
     });
+
     if (error) { setMsg(error.message); setTipo("error"); return; }
-    setConcepto(""); setNombre(""); setDescripcion(""); setMonto("");
-    setMsg("Periodo creado"); setTipo("success"); load();
+
+    setConcepto("");
+    setNombre("");
+    setDescripcion("");
+    setMonto("");
+    setMsg(`✅ Periodo creado: ${nombreFinal}`);
+    setTipo("success");
+    load();
   };
 
   const togglePeriodo = async (id, activoActual) => {
@@ -362,9 +625,7 @@ export default function VouchersAdmin() {
   const guardarEdicion = async () => {
     setMsg(""); setTipo("");
     const { error } = await supabase.from("payment_periods").update({
-      concepto: editando.concepto,
       nombre: editando.nombre,
-      descripcion: editando.descripcion,
       monto: Number(editando.monto)
     }).eq("id", editando.id);
 
@@ -390,20 +651,24 @@ export default function VouchersAdmin() {
     if (!vEdit) return;
     setMsg(""); setTipo("");
     try {
-      const { error } = await supabase.from("vouchers").update({
+      const updateData = {
         created_at: vEdit.created_at,
         cuota_numero: Number(vEdit.cuota_numero),
         total_cuotas: Number(vEdit.total_cuotas),
         estado: vEdit.estado,
-        comentario: vEdit.comentario
-      }).eq("id", vEdit.id);
+        comentario: vEdit.comentario,
+        mes: vEdit.mes ? Number(vEdit.mes) : null,
+        anio: vEdit.anio ? Number(vEdit.anio) : null
+      };
+
+      // Add individual amount if it exists
+      if (vEdit.monto_individual !== undefined && vEdit.monto_individual !== null) {
+        updateData.monto_individual = Number(vEdit.monto_individual);
+      }
+
+      const { error } = await supabase.from("vouchers").update(updateData).eq("id", vEdit.id);
 
       if (error) throw error;
-
-      // Si se editó el monto del periodo asociado (opcional, para conveniencia del admin)
-      if (vEdit.payment_periods?.monto !== undefined) {
-        await supabase.from("payment_periods").update({ monto: Number(vEdit.payment_periods.monto) }).eq("id", vEdit.period_id);
-      }
 
       setMsg("Pago actualizado ✅"); setTipo("success");
       setShowVEdit(false); setVEdit(null);
@@ -534,6 +799,8 @@ export default function VouchersAdmin() {
         period_id: finalPeriodId,
         cuota_numero: Number(manualData.cuota_numero),
         total_cuotas: Number(manualData.total_cuotas),
+        mes: manualData.mes ? Number(manualData.mes) : null,
+        anio: manualData.anio ? Number(manualData.anio) : null,
         estado: manualData.estado,
         comentario: manualData.comentario,
         created_at: new Date(manualData.created_at).toISOString(),
@@ -558,813 +825,323 @@ export default function VouchersAdmin() {
     }
   };
 
-  if (loading) return <div className="p-6">Cargando...</div>;
-  if (rol !== "directiva") return <div className="p-6 text-red-700">Acceso denegado.</div>;
+  if (loading) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+    </div>
+  );
+  if (rol !== "directiva") return <div className="p-10 text-center text-red-600 font-black text-xl">Acceso denegado.</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
-
-        {/* HEADER & TABS */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">Panel Directiva</h1>
-            <p className="text-sm text-gray-500">Gestión de periodos y validación de pagos.</p>
-          </div>
-          <div className="flex gap-2 bg-white p-1 rounded-lg border shadow-sm">
-            <button
-              onClick={() => setTab("validacion")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition ${tab === 'validacion' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
-            >
-              Validación de Pagos
-            </button>
-            <button
-              onClick={() => setTab("historial")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition ${tab === 'historial' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
-            >
-              Historial Global
-            </button>
-            <button
-              onClick={() => setTab("config")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition ${tab === 'config' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
-            >
-              🛠️ Configuración
-            </button>
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 pb-20">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200">
+        <div className="max-w-7xl mx-auto px-6 py-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-4">
+            <div className="bg-blue-600 p-2.5 rounded-2xl text-white shadow-lg shadow-blue-500/20">
+              <ShieldCheck className="h-7 w-7" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900 leading-none">Administración</h1>
+              <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Panel de Finanzas y Control de Socios</p>
+            </div>
           </div>
 
-          <button
-            onClick={() => setShowImport(true)}
-            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 shadow-md flex items-center gap-2 text-sm"
-          >
-            <span>📂</span> Importar Excel
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => document.getElementById('excel-import-2024').click()}
+              className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-green-500/25 transition-all hover:-translate-y-0.5 active:scale-95 flex items-center gap-2"
+            >
+              <Upload className="h-4 w-4" /> IMPORTAR EXCEL HISTÓRICO
+            </button>
+            <input
+              id="excel-import-2024"
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleExcelImport}
+              className="hidden"
+            />
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-6 pt-10">
+        {/* Navigation Tabs */}
+        <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-2 mb-10">
+          {[
+            { id: "validacion", label: "Validación", icon: CheckCircle2 },
+            { id: "historial", label: "Historial Global", icon: History },
+            { id: "config", label: "Periodos y Ajustes", icon: Settings },
+          ].map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`flex-1 flex items-center justify-center gap-3 px-6 py-4 rounded-xl text-sm font-bold transition-all ${tab === t.id
+                ? "bg-blue-600 text-white shadow-lg shadow-blue-500/30"
+                : "text-slate-500 hover:text-slate-900 hover:bg-slate-50"
+                }`}
+            >
+              <t.icon className="h-4 w-4" />
+              {t.label.toUpperCase()}
+            </button>
+          ))}
         </div>
 
-        {msg && <div className={`p-3 rounded-lg border text-sm ${tipo === "error" ? "bg-red-50 border-red-200 text-red-700" : "bg-green-50 border-green-200 text-green-700"}`}>{msg}</div>}
+        {msg && (
+          <div className={`mb-10 p-6 rounded-2xl border flex items-center gap-4 animate-in slide-in-from-top-4 duration-500 shadow-sm ${tipo === "error" ? "bg-rose-50 border-rose-100 text-rose-700" : "bg-emerald-50 border-emerald-100 text-emerald-700"
+            }`}>
+            <div className={`p-2 rounded-lg ${tipo === "error" ? "bg-rose-100" : "bg-emerald-100"}`}>
+              {tipo === "error" ? <AlertCircle className="h-5 w-5" /> : <Check className="h-5 w-5" />}
+            </div>
+            <p className="text-sm font-black uppercase tracking-tight">{msg}</p>
+          </div>
+        )}
 
         {/* ===================== TAB VALIDACION ===================== */}
         {tab === "validacion" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
-            {/* Sidebar: Periodos para Validar */}
-            <div className="lg:col-span-1 bg-white rounded-xl shadow p-5 border h-fit sticky top-6">
-              <div className="flex flex-col gap-3 mb-4">
-                <div className="flex justify-between items-center">
-                  <h2 className="font-bold text-gray-700">Seleccionar Periodo</h2>
-                  <button onClick={() => setMostrarTodos(!mostrarTodos)} className="text-xs underline text-blue-600">
-                    {mostrarTodos ? "Ver por periodo" : "Ver todos los pendientes"}
-                  </button>
-                </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 animate-in fade-in duration-500">
+            {/* Sidebar: Period Selection */}
+            <aside className="lg:col-span-3 space-y-6">
+              <div className="bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden flex flex-col">
+                <header className="px-8 py-6 border-b border-slate-100">
+                  <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                    <Calendar className="h-3.5 w-3.5" /> Selección de Periodo
+                  </h3>
+                </header>
 
-                {/* Filtros rápidos en Validación */}
-                <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
-                  {["todas", "mensual", "anual"].map(c => (
+                <div className="p-4 space-y-2 overflow-y-auto max-h-[60vh] custom-scrollbar">
+                  <button
+                    onClick={() => { setPeriodoSeleccionado(null); setMostrarTodos(true); }}
+                    className={`w-full group px-6 py-4 rounded-xl text-left transition-all ${mostrarTodos ? "bg-blue-600 text-white shadow-lg shadow-blue-600/20" : "hover:bg-slate-50 text-slate-600"
+                      }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-black uppercase tracking-tight">TODOS LOS PERIODOS</span>
+                      <ChevronRight className={`h-4 w-4 transition-transform ${mostrarTodos ? "rotate-90" : ""}`} />
+                    </div>
+                  </button>
+
+                  <div className="h-px bg-slate-50 my-2 mx-4" />
+
+                  {periodos.map(p => (
                     <button
-                      key={c}
-                      onClick={() => { setCatFiltro(c); setMesFiltro("todos"); }}
-                      className={`flex-1 px-2 py-1 rounded-md text-[10px] uppercase font-bold transition ${catFiltro === c ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                      key={p.id}
+                      onClick={() => { setPeriodoSeleccionado(p); setMostrarTodos(false); }}
+                      className={`w-full group px-6 py-4 rounded-xl text-left transition-all border ${periodoSeleccionado?.id === p.id && !mostrarTodos
+                        ? "bg-white border-blue-600 ring-2 ring-blue-500/10 shadow-sm"
+                        : "bg-white border-transparent hover:bg-slate-50"
+                        }`}
                     >
-                      {c === "todas" ? "Todos" : c === "mensual" ? "Mensual" : "Anual"}
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className={`text-sm font-black uppercase tracking-tight leading-none mb-1 ${periodoSeleccionado?.id === p.id && !mostrarTodos ? "text-blue-600" : "text-slate-900"
+                            }`}>
+                            {p.nombre}
+                          </div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase">{p.concepto}</div>
+                        </div>
+                        {conteoPorPeriodo.get(p.id) > 0 && (
+                          <div className="bg-blue-100 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-full ring-1 ring-blue-200">
+                            {conteoPorPeriodo.get(p.id)}
+                          </div>
+                        )}
+                      </div>
                     </button>
                   ))}
                 </div>
               </div>
+            </aside>
 
-              <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1 custom-scrollbar">
-                {periodosFiltrados.length === 0 ? (
-                  <p className="text-center text-xs text-gray-400 py-4">No hay periodos activos.</p>
-                ) : (
-                  periodosFiltrados.map(p => (
-                    <div
-                      key={p.id}
-                      onClick={() => { setPeriodoSeleccionado(p); setMostrarTodos(false); }}
-                      className={`w-full text-left p-3 rounded-lg border text-sm transition cursor-pointer ${periodoSeleccionado?.id === p.id ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-200' : 'hover:bg-gray-50'}`}
-                    >
-                      <div className="flex justify-between">
-                        <span className="font-bold text-gray-800">{p.nombre}</span>
-                        {conteoPorPeriodo.get(p.id) > 0 && (
-                          <span className="bg-yellow-400 text-yellow-900 text-[10px] font-black px-1.5 rounded-full flex items-center justify-center">
-                            {conteoPorPeriodo.get(p.id)}
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-gray-500 text-[10px] uppercase font-bold tracking-tight">{p.concepto}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* Main: Vouchers List */}
-            <div className="lg:col-span-2 bg-white rounded-xl shadow p-5 border min-h-[500px]">
-              <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="font-bold text-gray-800 text-lg">
-                  {periodoSeleccionado ? `Validando: ${periodoSeleccionado.nombre}` : (mostrarTodos ? "Todos los pagos pendientes" : "Selecciona un periodo a la izquierda")}
-                </h2>
-                <div className="relative">
+            {/* Validation Content */}
+            <div className="lg:col-span-9 space-y-8">
+              {/* Toolbar */}
+              <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col md:flex-row items-center gap-6">
+                <div className="relative flex-1 group w-full">
+                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
                   <input
-                    placeholder="Buscar socio o RUT..."
-                    className="border rounded-full px-4 py-2 text-sm w-64 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-100 outline-none transition"
+                    className="w-full bg-slate-50 border border-slate-100 py-4 pl-14 pr-6 rounded-2xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase placeholder:text-slate-300"
+                    placeholder="BUSCAR SOCIO POR NOMBRE O RUT..."
                     value={busqueda}
                     onChange={e => setBusqueda(e.target.value)}
                   />
-                  <span className="absolute right-3 top-2.5 text-gray-400">🔍</span>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Viendo:</span>
+                  <div className="bg-blue-50 border border-blue-100 text-blue-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider">
+                    {mostrarTodos ? "Todos" : periodoSeleccionado?.nombre}
+                  </div>
                 </div>
               </div>
 
-              {vouchersValidacion.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-                  <span className="text-5xl mb-4">✨</span>
-                  <p className="italic">No hay pagos pendientes de revisión para esta selección.</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {vouchersValidacion.map(v => (
-                    <VoucherRow
+              {/* List */}
+              <div className="grid grid-cols-1 gap-6 pb-20">
+                {vouchersValidacion.length === 0 ? (
+                  <div className="bg-white border border-dashed border-slate-200 rounded-[3rem] p-20 text-center animate-in fade-in duration-700">
+                    <div className="bg-slate-50 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+                      <CheckCircle2 className="h-10 w-10 text-slate-300" />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase">Sin Vouchers Pendientes</h3>
+                    <p className="text-sm font-bold text-slate-400 mt-2 uppercase tracking-wide">¡Todo al día por aquí!</p>
+                  </div>
+                ) : (
+                  vouchersValidacion.map(v => (
+                    <VoucherCard
                       key={v.id}
                       v={v}
-                      onView={verArchivo}
                       onReview={revisar}
-                      onDownload={descargarArchivo}
                       onDelete={eliminarVoucher}
+                      onEdit={() => { setVEdit(v); setShowVEdit(true); }}
+                      onView={verArchivo}
                     />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ===================== TAB HISTORIAL COMPLETO ===================== */}
-        {tab === "historial" && (
-          <div className="bg-white rounded-xl shadow p-6 border space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-              <div>
-                <h2 className="text-xl font-bold text-gray-800">Historial Global de Pagos</h2>
-                <p className="text-sm text-gray-500">Visualiza y exporta todos los pagos registrados por año.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  className="border rounded-lg p-2 text-sm font-bold bg-gray-50"
-                  value={anioHistorial}
-                  onChange={e => setAnioHistorial(e.target.value)}
-                >
-                  <option value="2024">Año 2024</option>
-                  <option value="2025">Año 2025</option>
-                  <option value="2026">Año 2026</option>
-                </select>
-
-                <select
-                  className="border rounded-lg p-2 text-sm font-bold bg-gray-50"
-                  value={mesHistorial}
-                  onChange={e => setMesHistorial(e.target.value)}
-                >
-                  <option value="todos">Todos los meses</option>
-                  {MESES.map(m => <option key={m.n} value={m.n}>{m.name}</option>)}
-                </select>
-
-                <button
-                  onClick={exportarExcel}
-                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
-                >
-                  <span>📊</span> Exportar Excel
-                </button>
-
-                <button
-                  onClick={() => setShowManual(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-blue-100"
-                >
-                  <span>📝</span> Registrar Pago Manual
-                </button>
-              </div>
-            </div>
-
-            {/* Tarjetas de Totales */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-blue-600 rounded-2xl p-5 text-white shadow-lg shadow-blue-100 flex items-center justify-between">
-                <div>
-                  <p className="text-blue-100 text-xs font-bold uppercase tracking-wider mb-1">Recaudación Total Año {anioHistorial}</p>
-                  <h3 className="text-2xl font-black">${statsHistorial.totalAnual.toLocaleString()}</h3>
-                </div>
-                <div className="bg-blue-500/30 p-3 rounded-xl text-2xl">💰</div>
-              </div>
-
-              {mesHistorial !== "todos" && (
-                <div className="bg-emerald-600 rounded-2xl p-5 text-white shadow-lg shadow-emerald-100 flex items-center justify-between">
-                  <div>
-                    <p className="text-emerald-100 text-xs font-bold uppercase tracking-wider mb-1">Recaudación {MESES.find(m => m.n === parseInt(mesHistorial))?.name}</p>
-                    <h3 className="text-2xl font-black">${statsHistorial.totalMensual.toLocaleString()}</h3>
-                  </div>
-                  <div className="bg-emerald-500/30 p-3 rounded-xl text-2xl">📅</div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 mb-4">
-              <input
-                placeholder="Filtrar por nombre, RUT o concepto..."
-                className="border rounded-lg p-2 w-full max-w-md"
-                value={busquedaHistorial}
-                onChange={e => setBusquedaHistorial(e.target.value)}
-              />
-            </div>
-
-            {/* Tabla Simple */}
-            <div className="overflow-x-auto border rounded-lg">
-              <table className="w-full text-sm text-left">
-                <thead className="bg-gray-100 text-gray-700 font-bold uppercase text-xs">
-                  <tr>
-                    <th className="p-3">Fecha</th>
-                    <th className="p-3">Usuario / RUT</th>
-                    <th className="p-3">Periodo</th>
-                    <th className="p-3">Cuota</th>
-                    <th className="p-3">Monto</th>
-                    <th className="p-3 text-center">Estado</th>
-                    <th className="p-3 text-center">Acción</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {vouchersHistorial.length === 0 ? (
-                    <tr><td colSpan="7" className="p-6 text-center text-gray-500">No se encontraron pagos en {anioHistorial}.</td></tr>
-                  ) : (
-                    vouchersHistorial.map(v => (
-                      <tr key={v.id} className="hover:bg-gray-50">
-                        <td className="p-3">{new Date(v.created_at).toLocaleDateString()}</td>
-                        <td className="p-3">
-                          <div className="font-bold">{v.profiles?.nombre_completo}</div>
-                          <div className="text-xs text-gray-500">{v.profiles?.rut}</div>
-                        </td>
-                        <td className="p-3">
-                          <div>{v.payment_periods?.nombre}</div>
-                          <div className="text-xs text-gray-500">{v.payment_periods?.concepto}</div>
-                        </td>
-                        <td className="p-3">
-                          {v.total_cuotas ? `${v.cuota_numero}/${v.total_cuotas}` : 'N/A'}
-                        </td>
-                        <td className="p-3">${v.payment_periods?.monto}</td>
-                        <td className="p-3 text-center">
-                          <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${v.estado === 'aprobado' ? 'bg-green-100 text-green-700' :
-                            v.estado === 'rechazado' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'
-                            }`}>
-                            {v.estado}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center flex items-center justify-center gap-2">
-                          {v.archivo_path && v.archivo_path !== "SIN_COMPROBANTE" && (
-                            <>
-                              <button
-                                onClick={() => verArchivo(v.archivo_path)}
-                                className="text-gray-400 hover:text-blue-600 transition h-8 w-8 flex items-center justify-center rounded-lg hover:bg-blue-50"
-                                title="Ver Comprobante"
-                              >
-                                👁️
-                              </button>
-                              <button
-                                onClick={() => descargarArchivo(v.archivo_path)}
-                                className="text-gray-400 hover:text-green-600 transition h-8 w-8 flex items-center justify-center rounded-lg hover:bg-green-50"
-                                title="Descargar Comprobante"
-                              >
-                                📥
-                              </button>
-                            </>
-                          )}
-                          <button
-                            onClick={() => { setVEdit(v); setShowVEdit(true); }}
-                            className="text-blue-600 hover:text-blue-800 text-xs font-bold underline px-2"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => eliminarVoucher(v.id, v.archivo_path)}
-                            className="text-red-400 hover:text-red-700 transition h-8 w-8 flex items-center justify-center rounded-lg hover:bg-red-50"
-                            title="Eliminar Registro"
-                          >
-                            🗑️
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="text-right text-xs text-gray-500">
-              Total registros: {vouchersHistorial.length}
-            </div>
-          </div>
-        )}
-
-
-        {/* MODALES EXTRAS (Editar, Conceptos, Import) Mantenidos igual... */}
-        {showEdit && editando && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl shadow max-w-lg w-full p-6 space-y-4">
-              <h3 className="text-lg font-bold">Editar Periodo</h3>
-              <input className="border rounded p-2 w-full" value={editando.nombre} onChange={e => setEditando({ ...editando, nombre: e.target.value })} />
-              <input className="border rounded p-2 w-full" type="number" value={editando.monto} onChange={e => setEditando({ ...editando, monto: e.target.value })} />
-              <div className="flex justify-end gap-2">
-                <button onClick={() => setShowEdit(false)} className="bg-gray-200 px-3 py-1 rounded">Cancelar</button>
-                <button onClick={guardarEdicion} className="bg-blue-600 text-white px-3 py-1 rounded">Guardar</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showConceptos && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold">Gestionar Conceptos</h3>
-                <button onClick={() => setShowConceptos(false)} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
-              </div>
-
-              {modalError && <div className="bg-red-50 text-red-700 p-2 rounded text-xs mb-3">{modalError}</div>}
-
-              <div className="flex gap-2 mb-4">
-                <input
-                  className="flex-1 border rounded-lg px-3 py-2 text-sm"
-                  placeholder="Nuevo concepto..."
-                  value={nuevoConceptoName}
-                  onChange={e => setNuevoConceptoName(e.target.value)}
-                />
-                <button onClick={crearConcepto} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold">+</button>
-              </div>
-
-              <div className="space-y-2 max-h-60 overflow-y-auto border rounded-lg p-2">
-                {conceptos.length === 0 ? (
-                  <p className="text-center text-gray-400 text-xs py-4">No hay conceptos definidos.</p>
-                ) : (
-                  conceptos.map(c => (
-                    <div key={c.id} className="flex justify-between items-center bg-gray-50 p-2 rounded text-sm">
-                      <span>{c.name}</span>
-                      <button onClick={() => eliminarConcepto(c.id)} className="text-red-500 hover:text-red-700 p-1">🗑️</button>
-                    </div>
                   ))
                 )}
               </div>
-
-              <button onClick={() => setShowConceptos(false)} className="w-full mt-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-2 rounded-lg transition">
-                Cerrar
-              </button>
             </div>
           </div>
         )}
 
-        {showImport && <ImportUsersModal onClose={() => setShowImport(false)} onReload={load} />}
-
-        {/* MODAL EDITAR VOUCHER INDIVIDUAL (HISTORIAL) */}
-        {showVEdit && vEdit && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-6 overflow-y-auto max-h-[90vh]">
-              <div className="flex justify-between items-center border-b pb-3">
-                <h3 className="text-xl font-bold text-gray-800">Editar Pago Individual</h3>
-                <button onClick={() => setShowVEdit(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">×</button>
+        {/* ===================== TAB HISTORIAL ===================== */}
+        {tab === "historial" && (
+          <div className="space-y-10 animate-in fade-in duration-500">
+            {/* Header with Filters */}
+            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col xl:flex-row justify-between items-center gap-8">
+              <div>
+                <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-none mb-1">Historial Global</h2>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Registros históricos de pagos</p>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Usuario</label>
-                  <p className="text-sm font-medium">{vEdit.profiles?.nombre_completo || "Desconocido"}</p>
-                  <p className="text-xs text-gray-400">{vEdit.profiles?.rut}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Fecha Registro</label>
-                    <input
-                      type="date"
-                      className="w-full border rounded-lg p-2 text-sm"
-                      value={vEdit.created_at?.slice(0, 10)}
-                      onChange={e => setVEdit({ ...vEdit, created_at: new Date(e.target.value).toISOString() })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estado</label>
-                    <select
-                      className="w-full border rounded-lg p-2 text-sm font-bold"
-                      value={vEdit.estado}
-                      onChange={e => setVEdit({ ...vEdit, estado: e.target.value })}
-                    >
-                      <option value="pendiente">Pendiente</option>
-                      <option value="aprobado">Aprobado</option>
-                      <option value="rechazado">Rechazado</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="col-span-1">
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cuota</label>
-                    <input
-                      type="number"
-                      className="w-full border rounded-lg p-2 text-sm"
-                      value={vEdit.cuota_numero || 1}
-                      onChange={e => setVEdit({ ...vEdit, cuota_numero: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">De (Total)</label>
-                    <input
-                      type="number"
-                      className="w-full border rounded-lg p-2 text-sm"
-                      value={vEdit.total_cuotas || 1}
-                      onChange={e => setVEdit({ ...vEdit, total_cuotas: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-span-1">
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Monto ($)</label>
-                    <input
-                      type="number"
-                      className="w-full border rounded-lg p-2 text-sm font-bold text-blue-700 bg-blue-50"
-                      value={vEdit.payment_periods?.monto || 0}
-                      onChange={e => setVEdit({ ...vEdit, payment_periods: { ...vEdit.payment_periods, monto: e.target.value } })}
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1 leading-tight">Nota: Cambiar esto afecta a todos en este periodo ({vEdit.payment_periods?.nombre}).</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Observación Admin</label>
-                  <textarea
-                    className="w-full border rounded-lg p-2 text-sm"
-                    rows="2"
-                    placeholder="Ej: Pago validado por transferencia directa..."
-                    value={vEdit.comentario || ""}
-                    onChange={e => setVEdit({ ...vEdit, comentario: e.target.value })}
-                  />
-                </div>
-
-                <div className="border-t pt-4">
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Comprobante / Foto</label>
-                  <div className="flex items-center gap-3">
-                    {vEdit.archivo_path && vEdit.archivo_path !== "SIN_COMPROBANTE" ? (
-                      <button
-                        type="button"
-                        onClick={() => verArchivo(vEdit.archivo_path)}
-                        className="text-xs bg-gray-100 px-3 py-2 rounded-lg hover:bg-gray-200 flex items-center gap-1"
-                      >
-                        📎 Ver actual
-                      </button>
-                    ) : (
-                      <span className="text-xs text-gray-400 italic">Sin archivo</span>
-                    )}
-
-                    <label className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition flex-1 text-center">
-                      {subiendoAdmin ? "Subiendo..." : "Subir/Cambiar Foto"}
-                      <input type="file" className="hidden" accept="image/*,application/pdf" onChange={subirReciboAdmin} disabled={subiendoAdmin} />
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4 border-t">
-                <button onClick={() => setShowVEdit(false)} className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 rounded-xl transition">
-                  Cancelar
-                </button>
-                <button onClick={guardarEdicionVoucher} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-blue-200">
-                  Guardar Cambios
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* MODAL REGISTRO MANUAL */}
-        {showManual && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-6">
-              <div className="flex justify-between items-center border-b pb-3">
-                <h3 className="text-xl font-bold text-gray-800">Registrar Pago Manual</h3>
-                <button onClick={() => setShowManual(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">✕</button>
-              </div>
-
-              <form onSubmit={registrarPagoManual} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Buscar y Seleccionar Usuario</label>
-                  {!usuarioManualSeleccionado ? (
-                    <div className="space-y-2">
-                      <input
-                        type="text"
-                        placeholder="Escribe RUT o Nombre para buscar..."
-                        className="w-full border rounded-lg px-3 py-2 text-sm bg-gray-50 focus:ring-2 focus:ring-blue-400 outline-none"
-                        value={filtroUsuarioManual}
-                        onChange={e => setFiltroUsuarioManual(e.target.value)}
-                        autoFocus
-                      />
-                      {filtroUsuarioManual.length > 1 && (
-                        <div className="border rounded-lg max-h-40 overflow-y-auto divide-y bg-white shadow-inner">
-                          {allProfiles
-                            .filter(u => {
-                              const q = filtroUsuarioManual.toLowerCase();
-                              return u.nombre_completo?.toLowerCase().includes(q) || u.rut?.toLowerCase().includes(q);
-                            })
-                            .map(u => (
-                              <div
-                                key={u.id}
-                                onClick={() => {
-                                  setUsuarioManualSeleccionado(u);
-                                  setManualData({ ...manualData, user_id: u.id });
-                                  setFiltroUsuarioManual("");
-                                }}
-                                className="p-2 text-sm hover:bg-blue-50 cursor-pointer flex justify-between items-center transition"
-                              >
-                                <span>{u.nombre_completo}</span>
-                                <span className="text-[10px] bg-gray-100 px-1 rounded text-gray-500">{u.rut}</span>
-                              </div>
-                            ))}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="flex justify-between items-center bg-blue-50 border border-blue-200 p-3 rounded-xl">
-                      <div>
-                        <div className="font-bold text-blue-800 text-sm">{usuarioManualSeleccionado.nombre_completo}</div>
-                        <div className="text-xs text-blue-600">{usuarioManualSeleccionado.rut}</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setUsuarioManualSeleccionado(null);
-                          setManualData({ ...manualData, user_id: "" });
-                        }}
-                        className="bg-blue-200 hover:bg-blue-300 text-blue-800 rounded-full h-6 w-6 flex items-center justify-center font-bold text-xs"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-gray-50 p-3 rounded-xl border border-dashed border-gray-300">
-                  <div className="flex justify-between items-center mb-2">
-                    <label className="text-xs font-bold text-gray-500 uppercase">Periodo de Pago</label>
-                    <button
-                      type="button"
-                      onClick={() => setCrearNuevoPeriodo(!crearNuevoPeriodo)}
-                      className="text-[10px] font-bold text-blue-600 hover:underline uppercase"
-                    >
-                      {crearNuevoPeriodo ? "← Seleccionar existente" : "+ Crear nuevo periodo"}
-                    </button>
-                  </div>
-
-                  {!crearNuevoPeriodo ? (
-                    <select
-                      required={!crearNuevoPeriodo}
-                      className="w-full border rounded-lg p-2 text-sm"
-                      value={manualData.period_id}
-                      onChange={e => setManualData({ ...manualData, period_id: e.target.value })}
-                    >
-                      <option value="">-- Seleccionar Periodo --</option>
-                      {periodos.map(p => (
-                        <option key={p.id} value={p.id}>{p.nombre} ({p.concepto})</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <div className="space-y-3 animate-in fade-in slide-in-from-top-1">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="relative">
-                          {!crearNuevoConceptoManual ? (
-                            <div className="flex gap-1">
-                              <select
-                                className="border rounded-lg p-2 text-sm flex-1"
-                                value={nuevoPeriodoData.concepto}
-                                onChange={e => setNuevoPeriodoData({ ...nuevoPeriodoData, concepto: e.target.value })}
-                              >
-                                <option value="">Concepto...</option>
-                                {conceptos.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                              </select>
-                              <button
-                                type="button"
-                                onClick={() => setCrearNuevoConceptoManual(true)}
-                                className="bg-gray-100 hover:bg-gray-200 px-2 rounded-lg text-xs"
-                                title="Nuevo Concepto"
-                              >
-                                +
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex gap-1">
-                              <input
-                                placeholder="Nuevo concepto..."
-                                className="border border-blue-300 rounded-lg p-2 text-sm flex-1 bg-blue-50"
-                                value={nuevoConceptoNombreManual}
-                                onChange={e => setNuevoConceptoNombreManual(e.target.value)}
-                              />
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  if (!nuevoConceptoNombreManual.trim()) return;
-                                  const { data, error } = await supabase.from("payment_concepts").insert({ name: nuevoConceptoNombreManual.trim() }).select().single();
-                                  if (error) alert(error.message);
-                                  else {
-                                    setConceptos([...conceptos, data].sort((a, b) => a.name.localeCompare(b.name)));
-                                    setNuevoPeriodoData({ ...nuevoPeriodoData, concepto: data.name });
-                                    setCrearNuevoConceptoManual(false);
-                                    setNuevoConceptoNombreManual("");
-                                  }
-                                }}
-                                className="bg-blue-600 text-white px-2 rounded-lg text-xs font-bold"
-                              >
-                                OK
-                              </button>
-                              <button type="button" onClick={() => setCrearNuevoConceptoManual(false)} className="bg-gray-200 px-2 rounded-lg text-xs">✕</button>
-                            </div>
-                          )}
-                        </div>
-                        <input
-                          placeholder="Nombre (Ej: Cuota Marzo 2023)"
-                          className="border rounded-lg p-2 text-sm"
-                          value={nuevoPeriodoData.nombre}
-                          onChange={e => setNuevoPeriodoData({ ...nuevoPeriodoData, nombre: e.target.value })}
-                        />
-                      </div>
-                      <input
-                        type="number"
-                        placeholder="Monto $"
-                        className="w-full border rounded-lg p-2 text-sm"
-                        value={nuevoPeriodoData.monto}
-                        onChange={e => setNuevoPeriodoData({ ...nuevoPeriodoData, monto: e.target.value })}
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-gray-50 p-4 rounded-xl border border-dashed border-gray-300">
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-2 flex justify-between">
-                    <span>Subir Comprobante (Opcional)</span>
-                    {archivoManual && <span className="text-blue-600">✓ Seleccionado</span>}
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                    onChange={e => setArchivoManual(e.target.files[0])}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cuota Nro</label>
-                    <input
-                      type="number"
-                      className="w-full border rounded-lg p-2 text-sm"
-                      value={manualData.cuota_numero}
-                      onChange={e => setManualData({ ...manualData, cuota_numero: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Total Cuotas</label>
-                    <input
-                      type="number"
-                      className="w-full border rounded-lg p-2 text-sm"
-                      value={manualData.total_cuotas}
-                      onChange={e => setManualData({ ...manualData, total_cuotas: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Fecha de Pago</label>
-                    <input
-                      type="date"
-                      className="w-full border rounded-lg p-2 text-sm"
-                      value={manualData.created_at}
-                      onChange={e => setManualData({ ...manualData, created_at: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estado</label>
-                    <select
-                      className="w-full border rounded-lg p-2 text-sm font-bold"
-                      value={manualData.estado}
-                      onChange={e => setManualData({ ...manualData, estado: e.target.value })}
-                    >
-                      <option value="aprobado">Aprobado</option>
-                      <option value="pendiente">Pendiente</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Comentario / Nota</label>
-                  <textarea
-                    className="w-full border rounded-lg p-2 text-sm"
-                    rows="2"
-                    value={manualData.comentario}
-                    onChange={e => setManualData({ ...manualData, comentario: e.target.value })}
-                  />
-                </div>
-
-                <div className="flex gap-3 pt-4 border-t">
-                  <button type="button" onClick={() => setShowManual(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition">
-                    Cancelar
-                  </button>
-                  <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition shadow-lg shadow-blue-200">
-                    Registrar Pago
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* ===================== TAB CONFIGURACIÓN ===================== */}
-        {tab === "config" && (
-          <div className="space-y-6 animate-in fade-in duration-300">
-            {/* Crear Periodo Card */}
-            <div className="bg-white rounded-2xl shadow-xl p-8 border border-blue-100 relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-4 opacity-5 text-6xl">⚙️</div>
-              <h2 className="text-lg font-black uppercase text-blue-900 mb-6 flex items-center gap-2">
-                <span className="bg-blue-600 text-white p-1.5 rounded-lg text-sm">＋</span>
-                Nuevo Tipo de Pago / Periodo
-              </h2>
-
-              <form onSubmit={crearPeriodo} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                <div className="md:col-span-3 space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Concepto Base</label>
-                  <div className="flex gap-1">
-                    <select className="flex-1 border rounded-xl p-3 text-sm bg-gray-50 focus:ring-2 focus:ring-blue-100 outline-none transition" value={concepto} onChange={e => setConcepto(e.target.value)}>
-                      <option value="">Seleccionar...</option>
-                      {conceptos.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                    </select>
-                    <button type="button" onClick={() => setShowConceptos(true)} className="bg-gray-100 hover:bg-blue-100 text-blue-600 px-3 rounded-xl transition" title="Configurar Conceptos">⚙️</button>
-                  </div>
-                </div>
-
-                <div className="md:col-span-3 space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Nombre Descriptivo</label>
-                  <input className="w-full border rounded-xl p-3 text-sm bg-gray-50 focus:ring-2 focus:ring-blue-100 outline-none transition" placeholder="Ej: Cuota Enero 2025" value={nombre} onChange={e => setNombre(e.target.value)} />
-                </div>
-
-                <div className="md:col-span-4 space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Descripción corta (opcional)</label>
-                  <input className="w-full border rounded-xl p-3 text-sm bg-gray-50 focus:ring-2 focus:ring-blue-100 outline-none transition" placeholder="Detalles extra..." value={descripcion} onChange={e => setDescripcion(e.target.value)} />
-                </div>
-
-                <div className="md:col-span-1 space-y-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Monto ($)</label>
-                  <input className="w-full border rounded-xl p-3 text-sm bg-gray-50 focus:ring-2 focus:ring-blue-100 outline-none transition font-bold text-blue-700" type="number" placeholder="0" value={monto} onChange={e => setMonto(e.target.value)} />
-                </div>
-
-                <button className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl p-3 font-bold md:col-span-1 shadow-lg shadow-blue-100 transition flex items-center justify-center">
-                  <span className="text-xl">＋</span>
-                </button>
-              </form>
-            </div>
-
-            {/* Listado de Periodos Existentes */}
-            <div className="bg-white rounded-2xl shadow-lg border p-6">
-              <div className="flex justify-between items-center mb-6">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-800">Gestión de Periodos</h2>
-                  <p className="text-sm text-gray-500">Activa, desactiva o edita los planes de pago existentes.</p>
-                </div>
-                <div className="flex gap-2">
-                  <select className="border rounded-lg px-3 py-1 text-xs bg-gray-50" value={catFiltro} onChange={e => setCatFiltro(e.target.value)}>
-                    <option value="todas">Todas las categorías</option>
-                    <option value="mensual">Mensual</option>
-                    <option value="anual">Anual</option>
+              <div className="flex flex-wrap gap-4 items-center">
+                <div className="flex bg-slate-50 border border-slate-200 p-2 rounded-xl gap-2">
+                  <select
+                    className="bg-transparent text-sm font-bold text-slate-700 px-4 py-2 outline-none"
+                    value={anioHistorial}
+                    onChange={e => setAnioHistorial(e.target.value)}
+                  >
+                    {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => <option key={y} value={y}>AÑO {y}</option>)}
+                    <option disabled>──────────</option>
+                    {RANGE_ANIOS.filter(y => y < 2024 || y > 2030).map(y => <option key={y} value={y}>AÑO {y}</option>)}
+                  </select>
+                  <div className="w-px h-6 bg-slate-200 self-center"></div>
+                  <select
+                    className="bg-transparent text-sm font-bold text-slate-700 px-4 py-2 outline-none"
+                    value={mesHistorial}
+                    onChange={e => setMesHistorial(e.target.value)}
+                  >
+                    <option value="todos">TODOS LOS MESES</option>
+                    {MESES.map(m => <option key={m.n} value={m.n}>{m.name.toUpperCase()}</option>)}
                   </select>
                 </div>
+
+                <button
+                  onClick={exportarExcel}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5"
+                >
+                  <Download className="h-4 w-4" />
+                  EXPORTAR EXCEL
+                </button>
+              </div>
+            </div>
+
+            {/* Stats resumidas */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+                  <History className="h-20 w-20 text-slate-900" />
+                </div>
+                <p className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">Total Recaudado Anual</p>
+                <h3 className="text-5xl font-black text-slate-900">${statsHistorial.totalAnual.toLocaleString()}</h3>
               </div>
 
+              <div className="bg-blue-600 border border-blue-500 p-8 rounded-3xl shadow-lg shadow-blue-500/20 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+                  <DollarSign className="h-20 w-20 text-white" />
+                </div>
+                <p className="text-sm font-black text-blue-100 uppercase tracking-widest mb-2">Recaudación del Mes</p>
+                <h3 className="text-5xl font-black text-white">${statsHistorial.totalMensual.toLocaleString()}</h3>
+              </div>
+            </div>
+
+            {/* Tabla de Registros */}
+            <div className="bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead className="text-xs text-gray-400 uppercase bg-gray-50 border-y">
-                    <tr>
-                      <th className="px-6 py-4">Nombre / Concepto</th>
-                      <th className="px-6 py-4">Monto</th>
-                      <th className="px-6 py-4 text-center">Estado</th>
-                      <th className="px-6 py-4 text-center">Acciones</th>
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">
+                      <th className="px-8 py-6">Periodo</th>
+                      <th className="px-8 py-6">Socio</th>
+                      <th className="px-8 py-6">Concepto / Detalles</th>
+                      <th className="px-8 py-6">Monto</th>
+                      <th className="px-8 py-6 text-center">Comprobante</th>
+                      <th className="px-8 py-6 text-center">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
-                    {periodosFiltrados.length === 0 ? (
-                      <tr><td colSpan="4" className="px-6 py-10 text-center text-gray-400 italic">No hay periodos configurados.</td></tr>
+                  <tbody className="divide-y divide-slate-100">
+                    {vouchersHistorial.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="px-8 py-20 text-center text-slate-400 font-medium italic">
+                          No se encontraron registros para el periodo seleccionado.
+                        </td>
+                      </tr>
                     ) : (
-                      periodosFiltrados.map(p => (
-                        <tr key={p.id} className="hover:bg-gray-50/80 transition">
-                          <td className="px-6 py-4">
-                            <div className="font-bold text-gray-800">{p.nombre}</div>
-                            <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{p.concepto}</div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="font-mono font-bold text-gray-700">${p.monto.toLocaleString()}</span>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <button
-                              onClick={() => togglePeriodo(p.id, p.activo)}
-                              className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter transition shadow-sm ${p.activo ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
-                            >
-                              {p.activo ? '● Activo' : '○ Inactivo'}
-                            </button>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <div className="flex justify-center gap-2">
-                              <button onClick={() => { setEditando(p); setShowEdit(true); }} className="p-2 hover:bg-blue-50 text-blue-600 rounded-lg transition" title="Editar">✏️</button>
-                              <button onClick={() => eliminarPeriodo(p.id)} className="p-2 hover:bg-red-50 text-red-600 rounded-lg transition" title="Eliminar">🗑️</button>
+                      vouchersHistorial.map(v => (
+                        <tr key={v.id} className="hover:bg-slate-50 transition-colors group">
+                          <td className="px-8 py-6">
+                            <div className="flex items-center gap-2">
+                              <img src={master12Logo} alt="Club Master" className="h-6 w-6" />
+                              <div>
+                                {v.mes && v.anio ? (
+                                  <div className="text-sm font-black text-slate-900">
+                                    {MESES.find(m => m.n === v.mes)?.name} {v.anio}
+                                  </div>
+                                ) : v.anio ? (
+                                  <div className="text-sm font-black text-slate-900">{v.anio}</div>
+                                ) : (
+                                  <div className="text-sm font-bold text-slate-400">
+                                    {new Date(v.created_at).toLocaleDateString("es-CL", { month: "short", year: "numeric" })}
+                                  </div>
+                                )}
+                                <div className="text-[9px] font-bold text-slate-400 uppercase">Subido: {new Date(v.created_at).toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit" })}</div>
+                              </div>
                             </div>
+                          </td>
+                          <td className="px-8 py-6">
+                            <div className="font-black text-slate-900 uppercase tracking-tight">{v.profiles?.nombre_completo}</div>
+                            <div className="text-xs font-bold text-slate-400 uppercase">{v.profiles?.rut}</div>
+                          </td>
+                          <td className="px-8 py-6">
+                            <div className="flex flex-col gap-1">
+                              <span className="text-sm font-bold text-blue-600 uppercase tracking-wide">{v.payment_periods?.nombre}</span>
+                              {v.total_cuotas && (
+                                <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md w-fit">
+                                  CUOTA {v.cuota_numero}/{v.total_cuotas}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-8 py-6">
+                            <span className="text-lg font-black text-slate-900">${v.monto_individual?.toLocaleString() || v.payment_periods?.monto?.toLocaleString()}</span>
+                          </td>
+                          <td className="px-8 py-6 text-center">
+                            {v.archivo_path && v.archivo_path !== "SIN_COMPROBANTE" && v.archivo_path !== "excel-import/historico" ? (
+                              <button
+                                onClick={() => verArchivo(v.archivo_path)}
+                                className="w-10 h-10 bg-slate-100 group-hover:bg-blue-600 group-hover:text-white rounded-xl flex items-center justify-center transition-all mx-auto"
+                                title="Ver Comprobante"
+                              >
+                                <FileText className="h-5 w-5" />
+                              </button>
+                            ) : (
+                              <span className="text-[10px] font-black text-slate-300">SIN ARCHIVO</span>
+                            )}
+                          </td>
+                          <td className="px-8 py-6 text-center">
+                            <button
+                              onClick={() => { setVEdit(v); setShowVEdit(true); }}
+                              className="w-10 h-10 bg-white border border-slate-200 group-hover:bg-slate-900 group-hover:text-white group-hover:border-slate-900 rounded-xl flex items-center justify-center transition-all mx-auto"
+                              title="Editar Pago"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
                           </td>
                         </tr>
                       ))
@@ -1375,92 +1152,742 @@ export default function VouchersAdmin() {
             </div>
           </div>
         )}
-      </div>
+
+
+        {/* MODALES EXTRAS (Editar, Conceptos, Import) Mantenidos igual... */}
+        {/* MODALES EXTRAS (Editar, Conceptos, Import, Manual, Edit Voucher) */}
+        {/* Edit Plan Modal */}
+        {showEdit && editando && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-6 animate-in fade-in duration-300">
+            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200 border border-white">
+              <header className="bg-slate-50 px-8 py-6 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Editar Plan de Pago</h3>
+                  <p className="text-xs font-bold text-slate-400 mt-0.5">ESTÁS MODIFICANDO: {editando.nombre}</p>
+                </div>
+                <button onClick={() => setShowEdit(false)} className="bg-white p-2 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-900 transition-colors shadow-sm">
+                  <X className="h-5 w-5" />
+                </button>
+              </header>
+
+              <div className="p-8 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Nombre del Plan</label>
+                  <input
+                    className="w-full bg-slate-50 border border-slate-100 p-4 rounded-xl font-bold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all uppercase"
+                    value={editando.nombre}
+                    onChange={e => setEditando({ ...editando, nombre: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Monto Total ($)</label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-300" />
+                    <input
+                      className="w-full bg-blue-50/50 border border-blue-100 pl-12 pr-4 py-4 rounded-xl font-black text-blue-600 outline-none"
+                      type="number"
+                      value={editando.monto}
+                      onChange={e => setEditando({ ...editando, monto: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={guardarEdicion}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl font-bold transition-all shadow-lg shadow-blue-500/25 active:scale-[0.98]"
+                  >
+                    GUARDAR CAMBIOS
+                  </button>
+                  <button
+                    onClick={() => setShowEdit(false)}
+                    className="px-6 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-all"
+                  >
+                    CANCELAR
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showConceptos && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[110] p-6 animate-in fade-in duration-300">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200 border border-white">
+              <header className="bg-slate-50 px-8 py-6 border-b border-slate-100 flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Gestionar Categorías</h3>
+                  <p className="text-xs font-bold text-slate-400 mt-0.5">CONCEPTOS DE PAGO DISPONIBLES</p>
+                </div>
+                <button onClick={() => setShowConceptos(false)} className="bg-white p-2 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-900 transition-colors shadow-sm">
+                  <X className="h-5 w-5" />
+                </button>
+              </header>
+
+              <div className="p-8 space-y-6">
+                {modalError && (
+                  <div className="bg-rose-50 border border-rose-100 p-4 rounded-xl flex items-center gap-3 text-rose-600 animate-in shake duration-300">
+                    <AlertCircle className="h-5 w-5 shrink-0" />
+                    <p className="text-xs font-bold uppercase">{modalError}</p>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Agregar Nuevo Concepto</label>
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <Plus className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                      <input
+                        className="w-full bg-slate-50 border border-slate-100 pl-11 pr-6 py-4 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase placeholder:text-slate-300"
+                        placeholder="EJ: MATRÍCULA, MENSUALIDAD..."
+                        value={nuevoConceptoName}
+                        onChange={e => setNuevoConceptoName(e.target.value)}
+                      />
+                    </div>
+                    <button
+                      onClick={crearConcepto}
+                      className="bg-blue-600 hover:bg-blue-700 text-white px-6 rounded-xl font-black text-xl transition-all shadow-lg shadow-blue-500/20 active:scale-95"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                  {conceptos.map(c => (
+                    <div key={c.id} className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-100 group hover:border-blue-100 transition-all">
+                      <span className="font-bold text-slate-700 text-xs uppercase tracking-wide">{c.name}</span>
+                      <button
+                        onClick={() => eliminarConcepto(c.id)}
+                        className="w-8 h-8 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-300 hover:text-rose-600 hover:border-rose-100 transition-all"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setShowConceptos(false)}
+                  className="w-full bg-slate-900 hover:bg-black text-white p-4 rounded-xl font-bold transition-all shadow-lg active:scale-95 uppercase text-xs tracking-widest mt-4"
+                >
+                  CERRAR GESTIÓN
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showImport && <ImportUsersModal onClose={() => setShowImport(false)} onReload={load} />}
+
+        {showVEdit && vEdit && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[110] p-6 animate-in fade-in duration-300">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl overflow-hidden animate-in zoom-in-95 duration-200 border border-white max-h-[90vh] flex flex-col">
+              <header className="bg-slate-50 px-8 py-6 border-b border-slate-100 flex justify-between items-center shrink-0">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Editar Registro de Pago</h3>
+                  <p className="text-xs font-bold text-slate-400 mt-0.5 uppercase">ID VOUCHER: {vEdit.id?.substring(0, 8)}</p>
+                </div>
+                <button onClick={() => setShowVEdit(false)} className="bg-white p-2 rounded-xl border border-slate-200 text-slate-400 hover:text-slate-900 transition-colors shadow-sm">
+                  <X className="h-5 w-5" />
+                </button>
+              </header>
+
+              <div className="p-8 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Estado de Validación</label>
+                  <div className="relative">
+                    <CheckCircle2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                    <select
+                      className="w-full bg-slate-50 border border-slate-100 pl-11 pr-6 py-3.5 rounded-xl text-xs font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase appearance-none"
+                      value={vEdit.estado}
+                      onChange={e => setVEdit({ ...vEdit, estado: e.target.value })}
+                    >
+                      <option value="pendiente">🕒 Pendiente de Revisión</option>
+                      <option value="aprobado">✅ Pago Aprobado</option>
+                      <option value="rechazado">❌ Pago Rechazado</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Cuota Número</label>
+                    <input
+                      type="number"
+                      className="w-full bg-slate-50 border border-slate-100 px-6 py-3.5 rounded-xl text-sm font-black text-slate-900 outline-none text-center focus:bg-white transition-all"
+                      value={vEdit.cuota_numero || 1}
+                      onChange={e => setVEdit({ ...vEdit, cuota_numero: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Monto Cobrado ($)</label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                      <input
+                        type="number"
+                        className="w-full bg-blue-50/50 border border-blue-100 pl-11 pr-6 py-3.5 rounded-xl text-sm font-black text-blue-600 outline-none"
+                        value={vEdit.monto_individual !== undefined && vEdit.monto_individual !== null ? vEdit.monto_individual : (vEdit.payment_periods?.monto || 0)}
+                        onChange={e => setVEdit({ ...vEdit, monto_individual: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Mes Asociado</label>
+                    <div className="relative">
+                      <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                      <select
+                        className="w-full bg-slate-50 border border-slate-100 pl-11 pr-6 py-3.5 rounded-xl text-xs font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase appearance-none"
+                        value={vEdit.mes || ""}
+                        onChange={e => setVEdit({ ...vEdit, mes: e.target.value || null })}
+                      >
+                        <option value="">GENERAL / N/A</option>
+                        {MESES.map(m => <option key={m.n} value={m.n}>{m.name.toUpperCase()}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Año Asociado</label>
+                    <div className="relative">
+                      <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                      <select
+                        className="w-full bg-slate-50 border border-slate-100 px-6 py-3.5 rounded-xl text-sm font-black text-slate-900 outline-none focus:bg-white transition-all appearance-none text-center"
+                        value={vEdit.anio || ""}
+                        onChange={e => setVEdit({ ...vEdit, anio: e.target.value ? Number(e.target.value) : null })}
+                      >
+                        <option value="">AÑO...</option>
+                        {RANGE_ANIOS.map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Comentarios / Observaciones</label>
+                  <div className="relative">
+                    <MessageSquare className="absolute left-4 top-4 h-4 w-4 text-slate-300" />
+                    <textarea
+                      className="w-full bg-slate-50 border border-slate-100 pl-11 pr-6 py-4 rounded-xl text-xs font-bold text-slate-900 outline-none focus:bg-white transition-all min-h-[100px]"
+                      placeholder="Escribe un mensaje para el socio..."
+                      value={vEdit.comentario || ""}
+                      onChange={e => setVEdit({ ...vEdit, comentario: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-slate-100 space-y-4">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Comprobante Adjunto</p>
+                  <div className="flex flex-col gap-2">
+                    {vEdit.archivo_path && vEdit.archivo_path !== "SIN_COMPROBANTE" && (
+                      <button
+                        type="button"
+                        onClick={() => verArchivo(vEdit.archivo_path)}
+                        className="w-full bg-blue-50 hover:bg-blue-100 text-blue-600 p-4 rounded-xl text-xs font-bold uppercase transition-all flex items-center justify-center gap-2"
+                      >
+                        <FileText className="h-4 w-4" /> VER ARCHIVO ACTUAL
+                      </button>
+                    )}
+                    <label className="w-full bg-slate-900 hover:bg-black text-white p-4 rounded-xl text-xs font-black uppercase text-center cursor-pointer transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                      <Clock className="h-4 w-4" /> {subiendoAdmin ? "SUBIENDO..." : "REEMPLAZAR COMPROBANTE"}
+                      <input type="file" className="hidden" accept="image/*,application/pdf" onChange={subirReciboAdmin} disabled={subiendoAdmin} />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-8 bg-slate-50 border-t border-slate-100 flex flex-col gap-3 shrink-0">
+                <button
+                  onClick={guardarEdicionVoucher}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl font-bold text-sm shadow-xl shadow-blue-500/20 active:scale-95 transition-all uppercase"
+                >
+                  GUARDAR TODOS LOS CAMBIOS
+                </button>
+                <button
+                  onClick={() => setShowVEdit(false)}
+                  className="w-full bg-white border border-slate-200 text-slate-400 p-3 rounded-xl text-xs font-bold uppercase hover:text-slate-900 transition-all"
+                >
+                  CANCELAR EDICIÓN
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {/* Manual Registration Modal */}
+        {showManual && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-6 animate-in fade-in duration-300">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-white max-h-[90vh] flex flex-col">
+              <header className="bg-slate-50 px-10 py-8 border-b border-slate-100 flex justify-between items-center shrink-0">
+                <div>
+                  <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Registrar Pago Manual</h3>
+                  <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-wider">REGISTRO INTERNO DE TESORERÍA</p>
+                </div>
+                <button onClick={() => setShowManual(false)} className="bg-white p-3 rounded-2xl border border-slate-200 text-slate-400 hover:text-slate-900 transition-colors shadow-sm">
+                  <X className="h-6 w-6" />
+                </button>
+              </header>
+
+              <div className="p-10 overflow-y-auto custom-scrollbar flex-1">
+                <form onSubmit={registrarPagoManual} className="space-y-8">
+                  {/* User Search */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">1. Seleccionar Socio</label>
+                    {!usuarioManualSeleccionado ? (
+                      <div className="relative group">
+                        <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-300 group-focus-within:text-blue-500 transition-colors" />
+                        <input
+                          className="w-full bg-slate-50 border border-slate-200 py-4 pl-14 pr-6 rounded-2xl text-base font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase placeholder:text-slate-300"
+                          placeholder="BUSCAR POR NOMBRE O RUT..."
+                          value={filtroUsuarioManual}
+                          onChange={e => setFiltroUsuarioManual(e.target.value)}
+                        />
+                        {filtroUsuarioManual.length > 1 && (
+                          <div className="absolute top-full left-0 right-0 mt-3 bg-white border border-slate-200 rounded-3xl overflow-hidden z-[110] shadow-2xl max-h-64 overflow-y-auto animate-in slide-in-from-top-2">
+                            {allProfiles
+                              .filter(u => {
+                                const q = filtroUsuarioManual.toLowerCase();
+                                return u.nombre_completo?.toLowerCase().includes(q) || u.rut?.toLowerCase().includes(q);
+                              })
+                              .map(u => (
+                                <div
+                                  key={u.id}
+                                  onClick={() => {
+                                    setUsuarioManualSeleccionado(u);
+                                    setManualData({ ...manualData, user_id: u.id });
+                                    setFiltroUsuarioManual("");
+                                  }}
+                                  className="p-5 hover:bg-blue-50 cursor-pointer border-b border-slate-50 flex justify-between items-center transition-colors"
+                                >
+                                  <div>
+                                    <div className="font-black text-slate-900 text-sm uppercase">{u.nombre_completo}</div>
+                                    <div className="text-xs font-bold text-slate-400 mt-0.5">{u.rut}</div>
+                                  </div>
+                                  <Plus className="h-4 w-4 text-blue-600" />
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex justify-between items-center bg-blue-50 border border-blue-100 p-5 rounded-2xl">
+                        <div className="flex items-center gap-4">
+                          <div className="bg-blue-600 w-12 h-12 rounded-xl flex items-center justify-center text-white font-black">
+                            {usuarioManualSeleccionado.nombre_completo?.charAt(0)}
+                          </div>
+                          <div>
+                            <div className="font-black text-slate-900 uppercase text-sm">{usuarioManualSeleccionado.nombre_completo}</div>
+                            <div className="text-xs font-bold text-blue-600">{usuarioManualSeleccionado.rut}</div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUsuarioManualSeleccionado(null);
+                            setManualData({ ...manualData, user_id: "" });
+                          }}
+                          className="text-[10px] font-black text-blue-600 border border-blue-200 px-3 py-1.5 rounded-lg bg-white hover:bg-blue-600 hover:text-white transition-all uppercase shadow-sm"
+                        >
+                          CAMBIAR
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Details */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">2. Periodo / Concepto</label>
+                      <div className="relative">
+                        <Calendar className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-300" />
+                        <select
+                          required
+                          className="w-full bg-slate-50 border border-slate-200 py-4 pl-14 pr-6 rounded-2xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase appearance-none"
+                          value={manualData.period_id}
+                          onChange={e => {
+                            const pid = e.target.value;
+                            const p = periodos.find(x => x.id === pid);
+                            setManualData({ ...manualData, period_id: pid, monto_individual: p ? p.monto : "" });
+                          }}
+                        >
+                          <option value="">ELIJA...</option>
+                          {periodos.map(p => (
+                            <option key={p.id} value={p.id}>{p.nombre.toUpperCase()}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">3. Monto del Pago</label>
+                      <div className="relative">
+                        <DollarSign className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-300" />
+                        <input
+                          type="number"
+                          className="w-full bg-blue-50/50 border border-blue-100 py-4 pl-14 pr-6 rounded-2xl text-lg font-black text-blue-600 outline-none"
+                          value={manualData.monto_individual || ""}
+                          onChange={e => setManualData({ ...manualData, monto_individual: e.target.value })}
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Mes y Año (Solo si es mensual o si se desea especificar) */}
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Mes (Opcional)</label>
+                      <select
+                        className="w-full bg-slate-50 border border-slate-200 py-4 px-6 rounded-2xl text-sm font-bold text-slate-900 outline-none focus:bg-white transition-all uppercase appearance-none text-center"
+                        value={manualData.mes || ""}
+                        onChange={e => setManualData({ ...manualData, mes: e.target.value || null })}
+                      >
+                        <option value="">GENERAL</option>
+                        {MESES.map(m => <option key={m.n} value={m.n}>{m.name.toUpperCase()}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Año</label>
+                      <select
+                        className="w-full bg-slate-50 border border-slate-200 py-4 px-6 rounded-2xl text-sm font-bold text-slate-900 outline-none focus:bg-white transition-all appearance-none text-center"
+                        value={manualData.anio}
+                        onChange={e => setManualData({ ...manualData, anio: e.target.value })}
+                      >
+                        {RANGE_ANIOS.map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Cuotas */}
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Cuota Nº</label>
+                      <input
+                        type="number"
+                        className="w-full bg-slate-50 border border-slate-200 py-4 px-6 rounded-2xl text-sm font-black text-slate-900 outline-none text-center"
+                        value={manualData.cuota_numero}
+                        onChange={e => setManualData({ ...manualData, cuota_numero: e.target.value })}
+                        min="1"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Total Cuotas</label>
+                      <input
+                        type="number"
+                        className="w-full bg-slate-50 border border-slate-200 py-4 px-6 rounded-2xl text-sm font-black text-slate-900 outline-none text-center"
+                        value={manualData.total_cuotas}
+                        onChange={e => setManualData({ ...manualData, total_cuotas: e.target.value })}
+                        min="1"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">4. Comprobante (Opcional)</label>
+                    <label className="group relative block p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl text-center cursor-pointer hover:bg-slate-100 hover:border-slate-300 transition-all">
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="bg-white p-3 rounded-xl shadow-sm border border-slate-100 group-hover:scale-110 transition-transform">
+                          <FileText className="h-6 w-6 text-slate-400" />
+                        </div>
+                        <span className="text-xs font-black text-slate-600 uppercase tracking-tighter">
+                          {archivoManual ? archivoManual.name : "Subir Comprobante (PDF/JPG)"}
+                        </span>
+                      </div>
+                      <input type="file" className="hidden" onChange={e => setArchivoManual(e.target.files[0])} />
+                    </label>
+                  </div>
+
+                  <div className="flex flex-col gap-3 pt-4">
+                    <button
+                      type="submit"
+                      disabled={subiendoAdmin}
+                      className="w-full bg-slate-900 hover:bg-black text-white p-5 rounded-2xl font-black text-lg transition-all shadow-xl disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
+                    >
+                      <span className="relative z-10 flex items-center justify-center gap-3">
+                        {subiendoAdmin ? (
+                          <>
+                            <Loader2 className="h-6 w-6 animate-spin" />
+                            PROCESANDO...
+                          </>
+                        ) : "REGISTRAR PAGO AHORA"}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowManual(false)}
+                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-500 p-4 rounded-xl font-bold transition-all uppercase text-xs"
+                    >
+                      CANCELAR REGISTRO
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+        {/* ===================== TAB CONFIGURACIÓN ===================== */}
+        {tab === "config" && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 animate-in fade-in duration-500">
+            {/* Crear Periodo Card */}
+            <div className="lg:col-span-12 xl:col-span-5">
+              <div className="bg-white border border-slate-200 p-8 rounded-[2.5rem] shadow-sm space-y-8">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-none mb-1">Nuevo Plan de Pago</h2>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Configurar cobro recurrente u ocasional</p>
+                </div>
+
+                <form onSubmit={crearPeriodo} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Concepto de Pago</label>
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <Tag className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                        <select
+                          className="w-full bg-slate-50 border border-slate-100 pl-11 pr-6 py-3.5 rounded-xl text-xs font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase appearance-none"
+                          value={concepto}
+                          onChange={e => setConcepto(e.target.value)}
+                          required
+                        >
+                          <option value="">Selecciona concepto...</option>
+                          {conceptos.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowConceptos(true)}
+                        className="bg-white border border-slate-200 p-3.5 rounded-xl text-slate-400 hover:text-blue-600 hover:border-blue-600 transition-colors shadow-sm active:scale-95"
+                        title="Gestionar Conceptos"
+                      >
+                        <Settings2 className="h-5 w-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Año</label>
+                    <div className="relative">
+                      <Clock className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                      <select
+                        className="w-full bg-slate-50 border border-slate-100 pl-11 pr-6 py-3.5 rounded-xl text-xs font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase appearance-none"
+                        value={anioCreacion}
+                        onChange={e => setAnioCreacion(e.target.value)}
+                        required
+                      >
+                        {RANGE_ANIOS.map(a => (
+                          <option key={a} value={a}>{a}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">Monto ($)</label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+                      <input
+                        className="w-full bg-blue-50/50 border border-blue-100 pl-11 pr-6 py-3.5 rounded-xl text-sm font-black text-blue-600 outline-none"
+                        type="number"
+                        placeholder="0"
+                        value={monto}
+                        onChange={e => setMonto(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-5 bg-slate-50 border border-slate-100 rounded-2xl relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-110 transition-transform">
+                      <Eye className="h-10 w-10 text-slate-900" />
+                    </div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Vista Previa del Nombre:</p>
+                    <div className="text-sm font-black text-slate-900 uppercase">
+                      {concepto ? `${concepto} ${anioCreacion}` : "ESPERANDO DATOS..."}
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-xl font-bold transition-all shadow-lg shadow-blue-500/20 active:scale-95 uppercase text-xs tracking-wider"
+                  >
+                    CREAR PLAN DE PAGO
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            {/* Listado de Periodos Existentes */}
+            <div className="lg:col-span-12 xl:col-span-7">
+              <div className="bg-white border border-slate-200 p-8 rounded-[2.5rem] shadow-sm space-y-8 flex flex-col h-full">
+                <header className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-none mb-1">Planes Activos</h2>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">Inventario de cobros configurados</p>
+                  </div>
+                  <select
+                    className="bg-slate-50 border border-slate-100 px-4 py-2 text-[10px] font-black rounded-lg uppercase outline-none focus:ring-2 focus:ring-blue-500/10 cursor-pointer"
+                    value={catFiltro}
+                    onChange={e => setCatFiltro(e.target.value)}
+                  >
+                    <option value="todas">FILTRAR: TODOS</option>
+                    <option value="mensual">MENSUALES</option>
+                    <option value="anual">ANUALES / GENERAL</option>
+                  </select>
+                </header>
+
+                <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar flex-1">
+                  {periodosFiltrados.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-slate-200 gap-4">
+                      <Inbox className="h-16 w-16" />
+                      <p className="text-sm font-black uppercase tracking-widest italic">No hay planes registrados</p>
+                    </div>
+                  ) : (
+                    periodosFiltrados.map(p => (
+                      <div key={p.id} className="p-6 bg-white border border-slate-100 hover:border-blue-200 rounded-2xl shadow-sm transition-all flex flex-col sm:flex-row justify-between items-center gap-6 group">
+                        <div className="flex items-center gap-5">
+                          <div className={`w-3 h-3 rounded-full ring-4 ${p.activo ? "bg-emerald-500 ring-emerald-50" : "bg-rose-500 ring-rose-50"}`}></div>
+                          <div>
+                            <div className="text-base font-black text-slate-900 uppercase leading-none mb-1 group-hover:text-blue-600 transition-colors">{p.nombre}</div>
+                            <div className="flex gap-3 items-center">
+                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-50 px-2 py-0.5 rounded">{p.concepto}</span>
+                              <span className="text-xs font-black text-blue-600">${p.monto.toLocaleString()}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => togglePeriodo(p.id, p.activo)}
+                            className={`px-4 py-2 rounded-lg text-[10px] font-black transition-all ${p.activo ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white" : "bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white"
+                              }`}
+                          >
+                            {p.activo ? "ACTIVO" : "PAUSADO"}
+                          </button>
+                          <button
+                            onClick={() => { setEditando(p); setShowEdit(true); }}
+                            className="w-10 h-10 bg-slate-50 border border-slate-100 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-900 hover:bg-white hover:shadow-sm transition-all active:scale-90"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => eliminarPeriodo(p.id)}
+                            className="w-10 h-10 bg-slate-50 border border-slate-100 flex items-center justify-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-100 transition-all active:scale-90"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
     </div>
-  );
+  )
 }
 
-function VoucherRow({ v, onView, onReview, onDownload, onDelete }) {
+function VoucherCard({ v, onView, onReview, onDownload, onDelete, onEdit }) {
   const [comentario, setComentario] = useState(v.comentario || "");
 
   return (
-    <div className="border rounded-xl p-4 md:p-5 bg-white shadow-sm hover:shadow transition">
-      <div className="flex flex-col md:flex-row gap-4 justify-between items-start">
-        <div>
-          <h3 className="font-bold text-gray-800 text-lg">
-            {v.profiles?.nombre_completo || "Usuario Desconocido"}
-          </h3>
-          <p className="text-sm text-gray-500 font-mono">{v.profiles?.email} • {v.profiles?.rut}</p>
-          {(v.profiles?.numero_cuenta || v.profiles?.banco) && (
-            <p className="text-sm text-gray-600 mt-1">
-              <span className="font-semibold">Cuenta:</span> {v.profiles?.numero_cuenta || "N/A"} • <span className="font-semibold">Banco:</span> {v.profiles?.banco || "N/A"}
-            </p>
-          )}
-
-          <div className="mt-3 flex flex-wrap gap-2 text-sm">
-            <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded font-medium">
-              {v.payment_periods?.nombre}
-            </span>
-            <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded">
-              Monto: ${v.payment_periods?.monto}
-            </span>
-            {v.total_cuotas && (
-              <span className="bg-purple-50 text-purple-700 px-2 py-1 rounded font-bold">
-                Cuota {v.cuota_numero}/{v.total_cuotas}
-              </span>
-            )}
+    <div className="bg-white border border-slate-200 p-6 rounded-[2rem] shadow-sm space-y-6 animate-in fade-in duration-500 hover:shadow-md transition-all group">
+      <div className="flex flex-col xl:flex-row justify-between items-start gap-6">
+        {/* Info Socio */}
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white text-2xl font-black group-hover:scale-110 transition-transform">
+            {v.profiles?.nombre_completo?.charAt(0) || "U"}
           </div>
-
-          <div className="mt-2 text-xs text-gray-400">
-            Enviado: {new Date(v.created_at).toLocaleString()}
+          <div>
+            <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-none mb-1">{v.profiles?.nombre_completo}</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{v.profiles?.rut}</p>
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-2">
-          <span className={`px-3 py-1 rounded-full text-sm font-bold uppercase ${v.estado === 'aprobado' ? 'bg-green-100 text-green-700' : v.estado === 'rechazado' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
-            {v.estado}
+        {/* Detalles Voucher */}
+        <div className="flex flex-wrap gap-2">
+          <span className="bg-slate-900 text-white px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider">
+            {v.payment_periods?.nombre}
           </span>
-          <div className="flex gap-2">
-            {v.archivo_path && v.archivo_path !== "SIN_COMPROBANTE" && (
-              <>
-                <button
-                  onClick={() => onView(v.archivo_path)}
-                  className="text-blue-600 hover:text-blue-800 transition"
-                  title="Ver Comprobante"
-                >
-                  👁️
-                </button>
-                <button
-                  onClick={() => onDownload(v.archivo_path)}
-                  className="text-green-600 hover:text-green-800 transition"
-                  title="Descargar Comprobante"
-                >
-                  📥
-                </button>
-              </>
-            )}
+          <span className="bg-blue-50 text-blue-600 border border-blue-100 px-4 py-1.5 rounded-lg text-xs font-black">
+            ${(v.monto_individual || v.payment_periods?.monto || 0).toLocaleString()}
+          </span>
+          {v.total_cuotas > 0 && (
+            <span className="bg-slate-50 border border-slate-100 px-4 py-1.5 rounded-lg text-[10px] font-black text-slate-500 uppercase">
+              CUOTA {v.cuota_numero}/{v.total_cuotas}
+            </span>
+          )}
+          {v.mes && (
+            <span className="bg-amber-50 border border-amber-100 px-4 py-1.5 rounded-lg text-[10px] font-black text-amber-600 uppercase">
+              MES: {MESES.find(m => m.n === v.mes)?.name}
+            </span>
+          )}
+          {v.anio && (
+            <span className="bg-indigo-50 border border-indigo-100 px-4 py-1.5 rounded-lg text-[10px] font-black text-indigo-600 uppercase">
+              AÑO: {v.anio}
+            </span>
+          )}
+        </div>
+
+        {/* Acciones Rápidas */}
+        <div className="flex gap-2">
+          {v.archivo_path && v.archivo_path !== "SIN_COMPROBANTE" && (
             <button
-              onClick={() => onDelete(v.id, v.archivo_path)}
-              className="text-red-400 hover:text-red-700 transition"
-              title="Eliminar Registro"
+              onClick={() => onView(v.archivo_path)}
+              className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-600 transition-all shadow-sm"
+              title="VER COMPROBANTE"
             >
-              🗑️
+              <FileText className="h-5 w-5" />
             </button>
-          </div>
+          )}
+          <button
+            onClick={onEdit}
+            className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm"
+          >
+            <Edit className="h-5 w-5" />
+          </button>
+          <button
+            onClick={() => onDelete(v.id, v.archivo_path)}
+            className="w-10 h-10 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-100 transition-all shadow-sm"
+          >
+            <Trash2 className="h-5 w-5" />
+          </button>
         </div>
       </div>
 
-      {/* Acciones de Revisión */}
-      <div className="mt-4 pt-4 border-t flex flex-col md:flex-row gap-3 items-center">
-        <input
-          className="flex-1 border rounded-lg px-3 py-2 text-sm w-full"
-          placeholder="Observación (opcional)..."
-          value={comentario}
-          onChange={e => setComentario(e.target.value)}
-        />
-        <div className="flex gap-2 w-full md:w-auto">
-          <button onClick={() => onReview(v.id, "aprobado", comentario)} className="flex-1 md:w-24 bg-green-600 hover:bg-green-700 text-white rounded-lg py-2 text-sm font-medium">Aprobar</button>
-          <button onClick={() => onReview(v.id, "rechazado", comentario)} className="flex-1 md:w-24 bg-red-600 hover:bg-red-700 text-white rounded-lg py-2 text-sm font-medium">Rechazar</button>
+      {/* Acción de Validación */}
+      <div className="pt-6 border-t border-slate-100 space-y-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          <div className="relative flex-1">
+            <MessageSquare className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+            <input
+              className="w-full bg-slate-50 border border-slate-100 pl-11 pr-6 py-3.5 rounded-xl text-xs font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase placeholder:text-slate-300"
+              placeholder="Nota para el socio..."
+              value={comentario}
+              onChange={e => setComentario(e.target.value)}
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onReview(v.id, "aprobado", comentario)}
+              className="flex-1 md:flex-none px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all active:scale-95 uppercase tracking-wider"
+            >
+              APROBAR
+            </button>
+            <button
+              onClick={() => onReview(v.id, "rechazado", comentario)}
+              className="flex-1 md:flex-none px-8 py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-rose-500/20 transition-all active:scale-95 uppercase tracking-wider"
+            >
+              RECHAZAR
+            </button>
+          </div>
         </div>
       </div>
     </div>

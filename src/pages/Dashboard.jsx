@@ -2,6 +2,7 @@ import { useContext, useEffect, useState } from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { AppContext } from "@/context/AppContext";
 import { supabase } from "@/lib/supabase";
+import master12Logo from "@/assets/galeria/master12.png";
 import {
   Home,
   FileText,
@@ -14,6 +15,8 @@ import {
   LogOut,
   Waves,
   Calendar,
+  CreditCard,
+  DollarSign,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -59,6 +62,7 @@ export default function Dashboard() {
   ];
 
   const menuDirectivaExtra = [
+    { title: "Pagos Mensuales", url: "/dashboard/directiva/pagos-mensuales", icon: DollarSign },
     { title: "Revisar Pagos", url: "/dashboard/directiva/vouchers", icon: Shield },
     { title: "Ver Socios", url: "/dashboard/directiva/perfiles", icon: Users },
     { title: "Gestionar Competencias", url: "/dashboard/directiva/CrearConvocatoria", icon: ClipboardPlus },
@@ -87,8 +91,8 @@ export default function Dashboard() {
           <div className="flex items-center gap-3 mb-4">
             <div className="relative">
               <div className="absolute inset-0 bg-cyan-400 rounded-xl blur-lg opacity-20"></div>
-              <div className="relative bg-gradient-to-br from-cyan-400 to-blue-500 p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
-                <Waves className="h-7 w-7 text-white" />
+              <div className="relative bg-white p-2.5 rounded-xl shadow-lg shadow-blue-500/20">
+                <img src={master12Logo} alt="Club Master" className="h-7 w-7" />
               </div>
             </div>
             <div>

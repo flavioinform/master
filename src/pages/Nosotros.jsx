@@ -8,13 +8,15 @@ import dir1 from '@/assets/directiva/WhatsApp Image 2025-12-22 at 1.36.21 AM (1)
 import dir2 from '@/assets/directiva/WhatsApp Image 2025-12-22 at 1.36.21 AM.jpeg';
 import dir3 from '@/assets/directiva/WhatsApp Image 2025-12-22 at 1.36.22 AM.jpeg';
 import dir4 from '@/assets/directiva/WhatsApp Image 2025-12-22 at 1.36.29 AM.jpeg';
-
+import dir5 from '@/assets/directiva/grimanesa.png';
 const Nosotros = () => {
     const directiva = [
-        { nombre: "Mirtha Viviana", cargo: "Presidente", foto: dir2 },
+        { nombre: "Mirtha Mera", cargo: "Presidente", foto: dir2 },
         { nombre: "Amalia Pinto", cargo: "Secretario", foto: dir1 },
         { nombre: "Gina Vargas", cargo: "Tesorero", foto: dir3 },
-        { nombre: "Nombre por definir", cargo: "Director", foto: dir4 }
+        { nombre: "Gisselle Chaparro", cargo: "Director", foto: dir4 },
+        { nombre: "Grimanesa Peña", cargo: "Director", foto: dir5 },
+
     ];
 
     const valores = [
