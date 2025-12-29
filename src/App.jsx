@@ -22,6 +22,7 @@ import MisCuotas from "@/pages/dashboard/MisCuotas";
 // Convocatorias
 import ConvocatoriasList from "@/pages/dashboard/ConvocatoriasList";
 import ConvocatoriaInscripcion from "@/pages/dashboard/ConvocatoriaInscripcion";
+import CompetitionHistory from "@/pages/dashboard/CompetitionHistory";
 
 // Directiva
 import VouchersAdmin from "@/pages/dashboard/VouchersAdmin";
@@ -115,6 +116,9 @@ function App() {
 
             {/* Calendario */}
             <Route path="calendario" element={<CalendarioCompetencias />} />
+
+            {/* Historial de Competencias */}
+            <Route path="historial-competencias" element={<CompetitionHistory />} />
 
             {/* Directiva */}
             <Route

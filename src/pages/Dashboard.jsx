@@ -55,6 +55,7 @@ export default function Dashboard() {
     { title: "Inicio", url: "/dashboard", icon: Home },
     { title: "Mis Pagos", url: "/dashboard/vouchers", icon: FileText },
     { title: "Competencias", url: "/dashboard/convocatorias", icon: Trophy },
+    { title: "Historial Competencias", url: "/dashboard/historial-competencias", icon: Trophy },
     { title: "Calendario", url: "/dashboard/calendario", icon: Calendar },
     { title: "Mi Perfil", url: "/dashboard/perfil", icon: User },
     { title: "Historial", url: "/dashboard/historial", icon: Clock },

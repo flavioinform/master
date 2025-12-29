@@ -60,7 +60,7 @@ export default function CompetitionManager() {
             const { data, error } = await supabase
                 .from("competition_enrollments")
                 .select(`
-          id, entry_time, status, created_at,
+          id, entry_time, result_time, status, created_at,
           profiles!inner(id, nombre_completo, rut, fecha_nacimiento, telefono, talla),
           competition_events!inner(
             id, event_number,
@@ -243,7 +243,8 @@ export default function CompetitionManager() {
                                             <th className="p-3 text-center">Talla</th>
                                             <th className="p-3 text-left">Etapa</th>
                                             <th className="p-3 text-left">Prueba</th>
-                                            <th className="p-3 text-left">Tiempo</th>
+                                            <th className="p-3 text-left">T. Entrada</th>
+                                            <th className="p-3 text-left">T. Resultado</th>
                                             <th className="p-3 text-center">Estado</th>
                                         </tr>
                                     </thead>
@@ -257,7 +258,14 @@ export default function CompetitionManager() {
                                                 <td className="p-3">
                                                     <div className="font-medium text-slate-800">#{enr.competition_events.event_number} - {enr.competition_events.event_catalog?.name}</div>
                                                 </td>
-                                                <td className="p-3 font-mono text-xs">{enr.entry_time || "00:00:00"}</td>
+                                                <td className="p-3 font-mono text-xs text-slate-600">{enr.entry_time || "00:00:00"}</td>
+                                                <td className="p-3 font-mono text-xs">
+                                                    {enr.result_time ? (
+                                                        <span className="font-black text-green-700 bg-green-50 px-2 py-1 rounded">{enr.result_time}</span>
+                                                    ) : (
+                                                        <span className="text-slate-300 text-[10px]">Sin resultado</span>
+                                                    )}
+                                                </td>
                                                 <td className="p-3 text-center">
                                                     <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${enr.status === 'confirmed' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
                                                         }`}>
@@ -496,6 +504,7 @@ function ManualRegistrationModal({ stages, onClose, onReload }) {
     const [stageId, setStageId] = useState("");
     const [eventId, setEventId] = useState("");
     const [time, setTime] = useState("");
+    const [resultTime, setResultTime] = useState("");
     const [loading, setLoading] = useState(false);
 
     const handleSearch = async () => {
@@ -521,6 +530,7 @@ function ManualRegistrationModal({ stages, onClose, onReload }) {
             user_id: selectedUser.id,
             event_id: eventId,
             entry_time: time || "00:00:00",
+            result_time: resultTime || null,
             status: "confirmed"
         });
 
@@ -630,6 +640,17 @@ function ManualRegistrationModal({ stages, onClose, onReload }) {
                                 value={time}
                                 onChange={e => setTime(e.target.value)}
                             />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="block text-[10px] font-black text-green-600 uppercase tracking-[0.2em]">4. Tiempo de Resultado (Post-Competencia)</label>
+                            <input
+                                className="w-full border-2 border-green-100 rounded-xl p-3.5 text-sm font-mono font-bold focus:border-green-500 outline-none transition-all bg-green-50/30"
+                                placeholder="00:00:00"
+                                value={resultTime}
+                                onChange={e => setResultTime(e.target.value)}
+                            />
+                            <p className="text-[9px] text-slate-400 font-medium">Agregar después de finalizada la competencia</p>
                         </div>
 
                         <div className="flex gap-3 pt-6">
