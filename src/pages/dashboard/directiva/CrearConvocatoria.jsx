@@ -132,12 +132,22 @@ export default function CrearConvocatoria() {
             <h1 className="text-2xl font-bold text-gray-800">Gestión de Convocatorias</h1>
             <p className="text-sm text-gray-500">Crea y administra las competencias del club.</p>
           </div>
-          <button
-            onClick={() => openModal()}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 shadow"
-          >
-            + Nueva Competencia
-          </button>
+          <div className="flex gap-2">
+            <a
+              href="https://drive.google.com/file/d/1nhCPFN1-gMJGnz2EGxKPPd6dfUIe8OL5/view?usp=drive_link"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg font-bold shadow hover:shadow-md transition-all flex items-center gap-2"
+            >
+              <span>?</span> Ayuda
+            </a>
+            <button
+              onClick={() => openModal()}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-blue-700 shadow"
+            >
+              + Nueva Competencia
+            </button>
+          </div>
         </div>
 
         {msg && <div className="p-4 bg-red-100 text-red-700 rounded-lg">{msg}</div>}

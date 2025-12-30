@@ -205,7 +205,17 @@ export default function Perfil() {
 
   return (
     <div className="max-w-3xl space-y-6 pb-12">
-      <h1 className="text-2xl font-bold text-slate-900 border-b pb-4">Configuración de Cuenta</h1>
+      <div className="flex justify-between items-center border-b pb-4">
+        <h1 className="text-2xl font-bold text-slate-900">Configuración de Cuenta</h1>
+        <a
+          href="https://drive.google.com/file/d/1CmP0ghICjEqGLuuwmswwNyQtxTq0hF0m/view?usp=drive_link"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-sm transition-all flex items-center gap-2"
+        >
+          <span>?</span> Ayuda
+        </a>
+      </div>
 
       {/* Admin Search Bar */}
       {isAdmin && (

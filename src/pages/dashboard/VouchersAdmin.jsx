@@ -861,7 +861,17 @@ export default function VouchersAdmin() {
               <ShieldCheck className="h-7 w-7" />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-900 leading-none">Administración</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-black tracking-tight text-slate-900 leading-none">Administración</h1>
+                <a
+                  href="https://drive.google.com/file/d/1ooq_i3KKRiLDLRkiucTM2iUMx_PkryLR/view?usp=drive_link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-sky-600 hover:bg-sky-700 text-white px-3 py-1 rounded-lg font-bold text-xs shadow-sm transition-all flex items-center gap-1"
+                >
+                  <span>?</span> Ayuda
+                </a>
+              </div>
               <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-widest">Panel de Finanzas y Control de Socios</p>
             </div>
           </div>
