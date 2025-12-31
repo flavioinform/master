@@ -1539,8 +1539,29 @@ export default function VouchersAdmin() {
                           value={manualData.period_id}
                           onChange={e => {
                             const pid = e.target.value;
-                            const p = periodos.find(x => x.id === pid);
-                            setManualData({ ...manualData, period_id: pid, monto_individual: p ? p.monto : "" });
+                            // Fix: Ensure loose comparison in case id is number and value is string
+                            const p = periodos.find(x => String(x.id) === String(pid));
+
+                            let update = { period_id: pid, monto_individual: p ? p.monto : "" };
+
+                            // Auto-detect Month and Year from Period Name
+                            if (p && p.nombre) {
+                              const nameLower = p.nombre.toLowerCase();
+
+                              // Find Month
+                              const foundMes = MESES.find(m => nameLower.includes(m.name.toLowerCase()));
+                              if (foundMes) {
+                                update.mes = foundMes.n;
+                              }
+
+                              // Find Year (simple 4 digit check starting with 20)
+                              const foundYear = nameLower.match(/20\d{2}/);
+                              if (foundYear) {
+                                update.anio = Number(foundYear[0]);
+                              }
+                            }
+
+                            setManualData(prev => ({ ...prev, ...update }));
                           }}
                         >
                           <option value="">ELIJA...</option>

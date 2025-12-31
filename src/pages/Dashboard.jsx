@@ -53,13 +53,15 @@ export default function Dashboard() {
 
   const menuSocio = [
     { title: "Inicio", url: "/dashboard", icon: Home },
+    { title: "Mi Perfil", url: "/dashboard/perfil", icon: User },
+    { title: "Cambio Contraseña", url: "/dashboard/cambio-password", icon: Shield },
     { title: "Mis Pagos", url: "/dashboard/vouchers", icon: FileText },
     { title: "Competencias", url: "/dashboard/convocatorias", icon: Trophy },
     { title: "Historial Competencias", url: "/dashboard/historial-competencias", icon: Trophy },
     { title: "Calendario", url: "/dashboard/calendario", icon: Calendar },
-    { title: "Mi Perfil", url: "/dashboard/perfil", icon: User },
-    { title: "Historial", url: "/dashboard/historial", icon: Clock },
-    { title: "Cambio Contraseña", url: "/dashboard/cambio-password", icon: Shield },
+
+    // { title: "Historial", url: "/dashboard/historial", icon: Clock },
+
   ];
 
   const menuDirectivaExtra = [
@@ -75,6 +77,7 @@ export default function Dashboard() {
   const isActive = (url) => location.pathname === url;
 
   return (
+
     <div className="flex min-h-screen bg-slate-50">
       {/* Sidebar - Professional Light Celeste Theme */}
       <aside className="w-72 bg-gradient-to-b from-blue-50/80 to-white text-slate-600 flex flex-col relative overflow-hidden shadow-sm border-r border-blue-100/50">
@@ -85,6 +88,15 @@ export default function Dashboard() {
             <circle cx="110" cy="40" r="30" fill="none" stroke="currentColor" strokeWidth="6" />
             <circle cx="75" cy="75" r="30" fill="none" stroke="currentColor" strokeWidth="6" />
           </svg>
+        </div>
+        <div className="p-7 border-t border-blue-100/50 relative z-10 ">
+          <button
+            onClick={logout}
+            className="w-full flex items-left justify-center gap-2 px-4 py-3 rounded-2xl bg-slate-900 text-white hover:bg-slate-800 transition-all duration-300 text-sm font-bold shadow-xl shadow-slate-900/10"
+          >
+            <LogOut className="h-4 w-4" />
+            Cerrar Sesión
+          </button>
         </div>
 
         {/* Header */}
@@ -101,6 +113,7 @@ export default function Dashboard() {
               <p className="text-[10px] text-cyan-600 font-bold uppercase tracking-widest leading-none">Swimming Excellence</p>
             </div>
           </div>
+
         </div>
 
         {/* User Profile */}
@@ -117,12 +130,17 @@ export default function Dashboard() {
               <p className="text-sm font-bold truncate text-slate-800">{nombreCompleto || user?.email?.split('@')[0] || "Usuario"}</p>
             </div>
           </div>
+
           {isDirectiva && (
             <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500 text-white text-[9px] font-black uppercase tracking-wider shadow-md shadow-cyan-500/20">
               <Shield className="h-2.5 w-2.5" />
               Directiva
             </div>
+
+
+
           )}
+
         </div>
 
         {/* Navigation */}

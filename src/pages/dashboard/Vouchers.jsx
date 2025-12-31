@@ -34,6 +34,7 @@ export default function Vouchers() {
   // ========== FILTROS CATEGORIA Y MES ==========
   const [catFiltro, setCatFiltro] = useState("todas"); // todas | mensual | anual
   const [mesFiltro, setMesFiltro] = useState("todos"); // todos | 1 | 2 ... 12
+  const [anioFiltro, setAnioFiltro] = useState(new Date().getFullYear()); // ✅ Filtro de Año
   const [planCuotas, setPlanCuotas] = useState(1);
 
   // ========== MES Y AÑO PARA PAGOS MENSUALES ==========
@@ -89,7 +90,7 @@ export default function Vouchers() {
         const ids = list.map((p) => p.id);
         const { data: vs, error: e2 } = await supabase
           .from("vouchers")
-          .select("id, period_id, archivo_path, estado, comentario, created_at, updated_at, cuota_numero, total_cuotas, mes, anio")
+          .select("id, period_id, archivo_path, estado, comentario, created_at, updated_at, cuota_numero, total_cuotas, mes, anio, monto_individual")
           .eq("user_id", user.id)
           .in("period_id", ids)
           .order("cuota_numero", { ascending: true });
@@ -169,8 +170,19 @@ export default function Vouchers() {
       list = list.filter(p => p.concepto?.toLowerCase().includes("anual") || p.nombre?.toLowerCase().includes("anual"));
     }
 
+    // ✅ FILTRO DE AÑO (Nuevo)
+    if (anioFiltro !== "todos") {
+      list = list.filter(p => {
+        // Regex más flexible: busca 20XX en cualquier parte, no solo con límites de palabra
+        const matchAnio = p.nombre?.match(/(20\d{2})/);
+        const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : null;
+        // Si el periodo TIENE año, debe coincidir. Si no tiene, se muestra siempre (genérico).
+        return !anioPeriodo || anioPeriodo === parseInt(anioFiltro);
+      });
+    }
+
     return list;
-  }, [periodos, catFiltro, mesFiltro, userProfile]);
+  }, [periodos, catFiltro, mesFiltro, anioFiltro, userProfile]);
 
   // Vouchers del periodo seleccionado
   const vouchersActuales = useMemo(() => {
@@ -445,7 +457,10 @@ export default function Vouchers() {
 
             <div className="flex items-baseline gap-1">
               <span className="text-sm font-bold text-blue-400">$</span>
-              <p className="text-3xl font-black text-slate-900 font-mono tracking-tight">{montoCuota.toLocaleString()}</p>
+              <p className="text-3xl font-black text-slate-900 font-mono tracking-tight">
+                {/* Si el voucher existe y tiene monto guardado, usar ese. Si no, usar monto calculado */}
+                {(voucher && voucher.monto_individual) ? voucher.monto_individual.toLocaleString() : montoCuota.toLocaleString()}
+              </p>
             </div>
           </div>
 
@@ -464,14 +479,17 @@ export default function Vouchers() {
                   >
                     Ver Comprobante
                   </button>
-                  <label className="w-full bg-slate-50 text-slate-500 py-3 rounded-xl text-[10px] font-black uppercase text-center cursor-pointer border border-slate-100 hover:bg-slate-100 transition-all active:scale-95">
-                    {isUploadingThis ? "Subiendo..." : "Cambiar Archivo"}
-                    <input type="file" className="hidden" accept="image/*,application/pdf"
-                      onChange={(e) => {
-                        setFile(e.target.files?.[0]);
-                      }}
-                    />
-                  </label>
+                  {/* ✅ Solo mostrar input de archivo SI NO ES HISTÓRICO */}
+                  {!(periodoSel?.nombre?.toLowerCase().includes("histórico") || periodoSel?.concepto?.toLowerCase().includes("histórico")) && (
+                    <label className="w-full bg-slate-50 text-slate-500 py-3 rounded-xl text-[10px] font-black uppercase text-center cursor-pointer border border-slate-100 hover:bg-slate-100 transition-all active:scale-95">
+                      {isUploadingThis ? "Subiendo..." : "Cambiar Archivo"}
+                      <input type="file" className="hidden" accept="image/*,application/pdf"
+                        onChange={(e) => {
+                          setFile(e.target.files?.[0]);
+                        }}
+                      />
+                    </label>
+                  )}
                 </div>
                 {file && !cuotaSubiendo && (
                   <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl animate-in zoom-in-95">
@@ -488,18 +506,29 @@ export default function Vouchers() {
             ) : (
               <div className="space-y-4">
                 <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-100 bg-slate-50/50 rounded-2xl cursor-pointer hover:bg-white hover:border-blue-400 transition-all group overflow-hidden relative">
-                  <div className="text-center p-6 group-hover:scale-110 transition-transform">
-                    <FileText className="h-6 w-6 text-slate-300 mx-auto mb-2" />
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subir Ahora</p>
-                  </div>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*,application/pdf"
-                    onChange={(e) => {
-                      setFile(e.target.files?.[0]);
-                    }}
-                  />
+                  {(periodoSel?.nombre?.toLowerCase().includes("histórico") || periodoSel?.concepto?.toLowerCase().includes("histórico")) ? (
+                    // ✅ MODO LECTURA para Históricos
+                    <div className="text-center p-6 grayscale opacity-50 cursor-not-allowed">
+                      <Clock className="h-6 w-6 text-slate-300 mx-auto mb-2" />
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pago Histórico</p>
+                    </div>
+                  ) : (
+                    // ✅ MODO SUBIDA NORMAL
+                    <>
+                      <div className="text-center p-6 group-hover:scale-110 transition-transform">
+                        <FileText className="h-6 w-6 text-slate-300 mx-auto mb-2" />
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subir Ahora</p>
+                      </div>
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*,application/pdf"
+                        onChange={(e) => {
+                          setFile(e.target.files?.[0]);
+                        }}
+                      />
+                    </>
+                  )}
                 </label>
                 {file && !cuotaSubiendo && (
                   <div className="mt-4 p-5 bg-blue-50 border border-blue-100 rounded-2xl animate-in fade-in slide-in-from-bottom-2">
@@ -590,6 +619,21 @@ export default function Vouchers() {
                   </select>
                 </div>
               )}
+
+              {/* ✅ Filtro de Año - Clean Modern */}
+              <div className="relative">
+                <select
+                  className="bg-white border border-slate-100 rounded-2xl px-6 py-4 text-xs font-black text-slate-900 outline-none cursor-pointer appearance-none pr-12 shadow-sm focus:border-blue-600 transition-all uppercase"
+                  value={anioFiltro}
+                  onChange={e => setAnioFiltro(e.target.value)}
+                >
+                  <option value="todos">Todos los años</option>
+                  {aniosDisponibles.map(a => <option key={a} value={a}>{a}</option>)}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                  <ChevronDown className="h-4 w-4" />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -632,7 +676,17 @@ export default function Vouchers() {
                   <div className="my-6">
                     <div className="flex items-baseline gap-1">
                       <span className="text-sm font-bold text-blue-400">$</span>
-                      <p className="text-3xl font-black text-slate-900 font-mono tracking-tight">{p.monto.toLocaleString()}</p>
+                      <p className="text-3xl font-black text-slate-900 font-mono tracking-tight">
+                        {(() => {
+                          // Calculate total paid by user for this period
+                          const totalPagadoUser = misVs.reduce((acc, v) => acc + (v.monto_individual || 0), 0);
+                          // If period amount is 0 (historical) or if user has paid MORE than 0, prefer showing what they paid/will pay?
+                          // Logic: If period.monto is 0, definitely show totalPagadoUser.
+                          // If period.monto > 0, usually we show the period price.
+                          const amountToShow = p.monto > 0 ? p.monto : totalPagadoUser;
+                          return amountToShow.toLocaleString();
+                        })()}
+                      </p>
                     </div>
                   </div>
 

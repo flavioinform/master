@@ -2,6 +2,10 @@ import { useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 
+const normalizeRut = (rut) => {
+    return String(rut || "").replace(/[^0-9kK]/g, "").toLowerCase();
+};
+
 export default function ImportUsersModal({ onClose, onReload }) {
     const [mode, setMode] = useState("socios"); // 'socios' | 'pagos'
     const [year, setYear] = useState(new Date().getFullYear()); // For payments
@@ -55,7 +59,9 @@ export default function ImportUsersModal({ onClose, onReload }) {
             const rut = (row.RUT || "").trim();
             if (!rut) continue;
 
-            const cleanRut = rut.replace(/\./g, "").replace(/-/g, "").toLowerCase();
+            if (!rut) continue;
+
+            const cleanRut = normalizeRut(rut);
             const password = cleanRut.length >= 4 ? cleanRut.slice(-4) : "1234";
 
             rowsToInsert.push({
@@ -115,8 +121,8 @@ export default function ImportUsersModal({ onClose, onReload }) {
         const rutMap = new Map();
         profiles.forEach(p => {
             if (!p.rut) return;
-            rutMap.set(p.rut.toLowerCase(), p.id);
-            rutMap.set(p.rut.replace(/\./g, "").replace(/-/g, "").toLowerCase(), p.id);
+            // Map strictly normalized RUT to ID
+            rutMap.set(normalizeRut(p.rut), p.id);
         });
 
         for (let i = 0; i < data.length; i++) {
@@ -126,7 +132,9 @@ export default function ImportUsersModal({ onClose, onReload }) {
 
             if (!rawRut) continue;
 
-            const userId = rutMap.get(rawRut.toLowerCase()) || rutMap.get(rawRut.replace(/\./g, "").replace(/-/g, "").toLowerCase());
+            // Normalize input similarly
+            const cleanInput = normalizeRut(rawRut);
+            const userId = rutMap.get(cleanInput);
 
             if (userId && monto > 0) {
                 vouchersToInsert.push({

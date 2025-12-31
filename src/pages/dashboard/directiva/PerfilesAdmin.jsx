@@ -4,6 +4,34 @@ import { AppContext } from "@/context/AppContext";
 import { formatRut } from "@/lib/rutUtils";
 import * as XLSX from 'xlsx';
 
+
+
+const calcularCategoria = (fechaNacimiento) => {
+  if (!fechaNacimiento) return "";
+  const hoy = new Date();
+  const nac = new Date(fechaNacimiento);
+  let edad = hoy.getFullYear() - nac.getFullYear();
+  const m = hoy.getMonth() - nac.getMonth();
+  if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) {
+    edad--;
+  }
+
+  if (edad < 18) return "Menor de 18";
+  if (edad <= 24) return "18-24";
+  if (edad <= 29) return "25-29";
+  if (edad <= 34) return "30-34";
+  if (edad <= 39) return "35-39";
+  if (edad <= 44) return "40-44";
+  if (edad <= 49) return "45-49";
+  if (edad <= 54) return "50-54";
+  if (edad <= 59) return "55-59";
+  if (edad <= 64) return "60-64";
+  if (edad <= 69) return "65-69";
+  if (edad <= 74) return "70-74";
+  if (edad <= 79) return "75-79";
+  return "80+";
+};
+
 export default function PerfilesAdmin() {
   const { user } = useContext(AppContext);
 
@@ -224,6 +252,7 @@ export default function PerfilesAdmin() {
         'Dirección': user.direccion || '',
         'Comuna': user.comuna || '',
         'Fecha Ingreso': user.fecha_ingreso || '',
+        'Categoría': calcularCategoria(user.fecha_nacimiento), // ✅ Nueva columna
         'Talla': user.talla || '',
         'Número Cuenta': user.numero_cuenta || '',
         'Banco': user.banco || '',
@@ -247,6 +276,7 @@ export default function PerfilesAdmin() {
         { wch: 30 }, // Dirección
         { wch: 15 }, // Comuna
         { wch: 15 }, // Fecha Ingreso
+        { wch: 10 }, // Categoría
         { wch: 8 },  // Talla
         { wch: 18 }, // Número Cuenta
         { wch: 20 }, // Banco
@@ -426,15 +456,15 @@ export default function PerfilesAdmin() {
                 </td>
 
                 <td className="p-3 text-right space-x-2">
-                  <button
+                  {/* <button
                     onClick={() => toggleActivo(u.id, u.activo)}
                     className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${u.activo
-                        ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      ? "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                       }`}
                   >
                     {u.activo ? "Desactivar" : "Activar"}
-                  </button>
+                  </button> */}
 
                   <button
                     onClick={() => toggleRol(u.id, u.rol)}
@@ -450,15 +480,15 @@ export default function PerfilesAdmin() {
                     }}
                     className="px-3 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 text-xs font-semibold transition-all"
                   >
-                    Reset Pass
+                    Pass
                   </button>
 
-                  <button
+                  {/* <button
                     onClick={() => handleEditUser(u)}
                     className="px-3 py-1 rounded-lg bg-slate-900 text-white hover:bg-slate-800 text-xs font-semibold transition-all"
                   >
                     Editar Perfil
-                  </button>
+                  </button> */}
                 </td>
               </tr>
             ))}

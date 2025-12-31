@@ -51,6 +51,30 @@ export default function PagosMensuales() {
     const [filtroMes, setFiltroMes] = useState("todos");
     const [busqueda, setBusqueda] = useState("");
 
+    // State for Searchable Socio Select
+    const [busquedaSocio, setBusquedaSocio] = useState("");
+    const [mostrarDropdownSocios, setMostrarDropdownSocios] = useState(false);
+
+    // State for Manual Payment Date
+    const [fechaPago, setFechaPago] = useState(new Date().toISOString().split('T')[0]);
+
+    // Helper to filter socios
+    const sociosFiltrados = socios.filter(s =>
+        s.nombre_completo?.toLowerCase().includes(busquedaSocio.toLowerCase()) ||
+        s.rut?.toLowerCase().includes(busquedaSocio.toLowerCase())
+    );
+
+    useEffect(() => {
+        if (!periodoId) return;
+        const period = periodos.find(p => p.id === periodoId);
+
+        const isSpecificMonth = period && MESES.some(m => period.nombre?.toLowerCase().includes(m.nombre.toLowerCase()));
+
+        if (isSpecificMonth) {
+            setCantidadCuotas(1);
+        }
+    }, [periodoId]);
+
     // Generar años (5 años atrás y 5 adelante)
     const anioActual = new Date().getFullYear();
     const anios = Array.from({ length: 11 }, (_, i) => anioActual - 5 + i);
@@ -150,7 +174,9 @@ export default function PagosMensuales() {
                 }
 
                 const period = periodos.find(p => p.id === periodoId);
-                const esMensual = period?.concepto?.toLowerCase().includes("mensual") || period?.nombre?.toLowerCase().includes("mensual");
+                const esMensual = period?.concepto?.toLowerCase().includes("mensual") ||
+                    period?.nombre?.toLowerCase().includes("mensual") ||
+                    MESES.some(m => period?.nombre?.toLowerCase().includes(m.nombre.toLowerCase()));
                 const totalC = period?.total_cuotas || 1;
 
                 let nuevasCuotas = [];
@@ -340,7 +366,7 @@ export default function PagosMensuales() {
 
                 return supabase
                     .from("vouchers")
-                    .insert(voucherData);
+                    .insert({ ...voucherData, created_at: new Date(fechaPago).toISOString() });
             });
 
             const results = await Promise.all(insertPromises);
@@ -449,25 +475,83 @@ export default function PagosMensuales() {
 
                 <form onSubmit={registrarPago} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Socio */}
-                        <div className="md:col-span-2">
-                            <label className="block text-xl font-bold text-gray-700 mb-3">
-                                <User className="inline h-6 w-6 mr-2" />
-                                Socio
-                            </label>
-                            <select
-                                value={socioSeleccionado}
-                                onChange={(e) => setSocioSeleccionado(e.target.value)}
-                                className="w-full text-xl p-5 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold"
-                                required
-                            >
-                                <option value="">Selecciona un socio...</option>
-                                {socios.map(socio => (
-                                    <option key={socio.id} value={socio.id}>
-                                        {socio.nombre_completo} - {socio.rut}
-                                    </option>
-                                ))}
-                            </select>
+
+                        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Fecha de Pago */}
+                            <div>
+                                <label className="block text-xl font-bold text-gray-700 mb-3">
+                                    <Calendar className="inline h-6 w-6 mr-2" />
+                                    Fecha de Pago
+                                </label>
+                                <input
+                                    type="date"
+                                    value={fechaPago}
+                                    onChange={(e) => setFechaPago(e.target.value)}
+                                    className="w-full text-xl p-5 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold"
+                                    required
+                                />
+                            </div>
+
+                            {/* Socio Searchable */}
+                            <div className="relative">
+                                <label className="block text-xl font-bold text-gray-700 mb-3">
+                                    <User className="inline h-6 w-6 mr-2" />
+                                    Socio
+                                </label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar por Nombre o RUT..."
+                                        value={busquedaSocio}
+                                        onFocus={() => setMostrarDropdownSocios(true)}
+                                        onClick={() => setMostrarDropdownSocios(true)}
+                                        onChange={(e) => {
+                                            setBusquedaSocio(e.target.value);
+                                            setMostrarDropdownSocios(true);
+                                            // Validate if clearing clears selection
+                                            if (e.target.value === "") setSocioSeleccionado("");
+                                        }}
+                                        className="w-full text-xl p-5 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold"
+                                    />
+                                    {/* Clear button if selected */}
+                                    {socioSeleccionado && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setSocioSeleccionado("");
+                                                setBusquedaSocio("");
+                                            }}
+                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"
+                                        >
+                                            <span className="text-xl font-bold">✕</span>
+                                        </button>
+                                    )}
+                                </div>
+
+                                {mostrarDropdownSocios && busquedaSocio && !socioSeleccionado && (
+                                    <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                                        {sociosFiltrados.length > 0 ? (
+                                            sociosFiltrados.map(socio => (
+                                                <button
+                                                    key={socio.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSocioSeleccionado(socio.id);
+                                                        setBusquedaSocio(`${socio.nombre_completo} - ${socio.rut}`);
+                                                        setMostrarDropdownSocios(false);
+                                                    }}
+                                                    className="w-full text-left p-4 hover:bg-blue-50 border-b border-gray-100 last:border-0 transition-colors"
+                                                >
+                                                    <div className="font-bold text-gray-800">{socio.nombre_completo}</div>
+                                                    <div className="text-sm text-gray-500">{socio.rut}</div>
+                                                </button>
+                                            ))
+                                        ) : (
+                                            <div className="p-4 text-gray-500 italic text-center">No se encontraron socios</div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Tipo de Pago / Periodo */}
@@ -522,10 +606,18 @@ export default function PagosMensuales() {
                                 type="number"
                                 value={cantidadCuotas}
                                 onChange={(e) => setCantidadCuotas(Math.max(1, parseInt(e.target.value) || 1))}
-                                className="w-full text-xl p-5 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold"
+                                className={`w-full text-xl p-5 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold ${periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase())))
+                                    ? "bg-gray-100 text-gray-500 cursor-not-allowed"
+                                    : ""
+                                    }`}
                                 min="1"
                                 required
+                                disabled={periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase())))}
                             />
+                            {/* Visual Hint */}
+                            {periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase()))) && (
+                                <p className="text-sm text-blue-600 mt-2 font-bold ml-1">🔒 Fijo en 1 cuota para periodos mensuales específicos</p>
+                            )}
                         </div>
 
                         {/* Monto (por cuota) */}

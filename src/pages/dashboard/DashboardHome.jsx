@@ -72,7 +72,7 @@ export default function DashboardHome() {
         <div className="max-w-6xl mx-auto space-y-8 font-sans pb-20 animate-in fade-in duration-700">
 
             {/* Header - Clean Modern */}
-            <div className="bg-slate-900 border border-slate-800 rounded-[2.5rem] p-8 md:p-12 shadow-xl shadow-slate-200/50 text-white relative overflow-hidden">
+            <div className="bg-blue-400 border border-slate-800 rounded-[2.5rem] p-8 md:p-12 shadow-xl shadow-slate-200/50 text-white relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/10 rounded-full -mr-40 -mt-40 blur-3xl"></div>
                 <div className="relative z-10 space-y-4">
                     <div className="flex items-center gap-3">
@@ -82,7 +82,7 @@ export default function DashboardHome() {
                     <h1 className="text-4xl md:text-6xl font-black mb-2 tracking-tight leading-none">
                         ¡Hola, {nombreCompleto.split(' ')[0] || "Atleta"}!
                     </h1>
-                    <p className="text-lg md:text-xl font-medium text-slate-400 max-w-xl">
+                    <p className="text-lg md:text-xl font-medium text-slate-400 max-w-xl text-white">
                         Bienvenido de nuevo. Aquí tienes un resumen de tu estado actual y próximas actividades.
                     </p>
                 </div>
@@ -205,7 +205,7 @@ export default function DashboardHome() {
                 </div>
 
                 {/* Info Card - Clean Modern */}
-                <div className="lg:col-span-4 bg-blue-600 rounded-[2.5rem] p-8 text-white relative overflow-hidden flex flex-col justify-center">
+                <div className="lg:col-span-4 bg-blue-400 rounded-[2.5rem] p-8 text-white relative overflow-hidden flex flex-col justify-center">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-xl"></div>
                     <div className="relative z-10 space-y-4">
                         <Trophy className="h-12 w-12 text-blue-200 mb-2" />
