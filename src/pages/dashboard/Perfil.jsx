@@ -46,6 +46,8 @@ export default function Perfil() {
     banco: "",
     email: "",
     talla: "",
+    nacionalidad: "",
+    estado_civil: "",
   });
 
   const comunasTarapaca = [
@@ -107,7 +109,7 @@ export default function Perfil() {
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("nombre_completo,rut,fecha_nacimiento,telefono,direccion,comuna,fecha_ingreso,numero_cuenta,banco,email,talla")
+      .select("nombre_completo,rut,fecha_nacimiento,telefono,direccion,comuna,fecha_ingreso,numero_cuenta,banco,email,talla,nacionalidad,estado_civil")
       .eq("id", targetId)
       .single();
 
@@ -127,6 +129,8 @@ export default function Perfil() {
         banco: data.banco || "",
         email: data.email || "",
         talla: data.talla || "",
+        nacionalidad: data.nacionalidad || "Chilena",
+        estado_civil: data.estado_civil || "",
       });
     }
 
@@ -215,12 +219,8 @@ export default function Perfil() {
     setMsg("");
     setTipo("");
 
-    // Validación de Email
-    if (form.email && !form.email.endsWith("@gmail.com")) {
-      setMsg("⚠️ El correo debe ser @gmail.com");
-      setTipo("error");
-      return;
-    }
+    // Validación de Email (Permitir cualquiera, pero sugerir Gmail en UI)
+    // if (form.email && !form.email.endsWith("@gmail.com")) { ... } // REMOVIDO
 
     const targetId = selectedUserId || user.id;
 
@@ -399,13 +399,41 @@ export default function Perfil() {
                   value={form.email}
                   onChange={(e) => onChange("email", e.target.value)}
                   placeholder="user@gmail.com"
+                  onBlur={(e) => {
+                    let val = e.target.value;
+                    if (val && val.trim() !== "" && !val.includes("@")) {
+                      onChange("email", val.trim() + "@gmail.com");
+                    }
+                  }}
                 />
-                {!form.email?.endsWith("@gmail.com") && form.email?.length > 0 && (
-                  <div className="absolute right-2.5 top-2.5 text-amber-500 text-xs" title="Se recomienda usar @gmail.com">
-                    ⚠️
-                  </div>
-                )}
               </div>
+            </div>
+
+            {/* Nuevos Campos: Nacionalidad y Estado Civil */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Nacionalidad</label>
+              <input
+                className="w-full bg-slate-50 border-none ring-1 ring-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-blue-500/30 focus:bg-white outline-none transition-all font-medium text-slate-700 text-sm"
+                value={form.nacionalidad}
+                onChange={(e) => onChange("nacionalidad", e.target.value)}
+                placeholder="Chilena"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Estado Civil</label>
+              <select
+                className="w-full bg-slate-50 border-none ring-1 ring-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-blue-500/30 focus:bg-white outline-none transition-all appearance-none font-medium text-slate-700 text-sm"
+                value={form.estado_civil}
+                onChange={(e) => onChange("estado_civil", e.target.value)}
+              >
+                <option value="">Seleccionar...</option>
+                <option value="Soltero/a">Soltero/a</option>
+                <option value="Casado/a">Casado/a</option>
+                <option value="Viudo/a">Viudo/a</option>
+                <option value="Divorciado/a">Divorciado/a</option>
+                <option value="Conviviente Civil">Conviviente Civil</option>
+              </select>
             </div>
 
             <div>

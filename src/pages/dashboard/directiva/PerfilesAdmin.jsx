@@ -77,7 +77,7 @@ export default function PerfilesAdmin() {
       // 2️⃣ cargar perfiles
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, email, nombre_completo, rut, telefono, direccion, comuna, fecha_ingreso, fecha_nacimiento, talla, numero_cuenta, banco, rol, activo, created_at")
+        .select("id, email, nombre_completo, rut, telefono, direccion, comuna, fecha_ingreso, fecha_nacimiento, talla, numero_cuenta, banco, rol, activo, created_at, nacionalidad, estado_civil")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -205,6 +205,8 @@ export default function PerfilesAdmin() {
       talla: user.talla || "",
       numero_cuenta: user.numero_cuenta || "",
       banco: user.banco || "",
+      nacionalidad: user.nacionalidad || "Chilena",
+      estado_civil: user.estado_civil || "",
     });
     setShowEditModal(true);
   };
@@ -656,13 +658,45 @@ export default function PerfilesAdmin() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre Completo</label><input type="text" value={editForm.nombre_completo || ""} onChange={(e) => setEditForm({ ...editForm, nombre_completo: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
                   <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">RUT</label><input type="text" value={editForm.rut || ""} onChange={(e) => setEditForm({ ...editForm, rut: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" placeholder="Sin puntos y sin gui�n" /></div>
-                  <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label><input type="email" value={editForm.email || ""} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email</label>
+                    <input
+                      type="email"
+                      value={editForm.email || ""}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                      onBlur={(e) => {
+                        // ✅ Auto-completar @gmail.com si no tiene @
+                        let val = e.target.value;
+                        if (val && val.trim() !== "" && !val.includes("@")) {
+                          setEditForm({ ...editForm, email: val.trim() + "@gmail.com" });
+                        }
+                      }}
+                      className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold"
+                    />
+                  </div>
                   <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tel�fono</label><input type="text" value={editForm.telefono || ""} onChange={(e) => setEditForm({ ...editForm, telefono: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
                   <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fecha de Nacimiento</label><input type="date" value={editForm.fecha_nacimiento || ""} min="1920-01-01" max="2020-12-31" onChange={(e) => setEditForm({ ...editForm, fecha_nacimiento: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
                   <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Talla Polera</label><select value={editForm.talla || ""} onChange={(e) => setEditForm({ ...editForm, talla: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold"><option value="">Selecciona talla</option><option value="XS">XS</option><option value="S">S</option><option value="M">M</option><option value="L">L</option><option value="XL">XL</option><option value="XXL">XXL</option></select></div>
-                  <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Direcci�n</label><input type="text" value={editForm.direccion || ""} onChange={(e) => setEditForm({ ...editForm, direccion: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
+                  <div className="md:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Direccin</label><input type="text" value={editForm.direccion || ""} onChange={(e) => setEditForm({ ...editForm, direccion: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
                   <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Comuna</label><select value={editForm.comuna || ""} onChange={(e) => setEditForm({ ...editForm, comuna: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold"><option value="">Selecciona comuna</option>{comunasTarapaca.map(comuna => (<option key={comuna} value={comuna}>{comuna}</option>))}</select></div>
                   <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Fecha de Ingreso al Club</label><input type="date" value={editForm.fecha_ingreso || ""} min="2008-08-23" max="2025-12-29" onChange={(e) => setEditForm({ ...editForm, fecha_ingreso: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" /></div>
+
+                  {/* Nuevos Campos: Nacionalidad y Estado Civil */}
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nacionalidad</label>
+                    <input type="text" value={editForm.nacionalidad || ""} onChange={(e) => setEditForm({ ...editForm, nacionalidad: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Estado Civil</label>
+                    <select value={editForm.estado_civil || ""} onChange={(e) => setEditForm({ ...editForm, estado_civil: e.target.value })} className="w-full px-4 py-3 bg-white border-2 border-transparent focus:border-cyan-500 rounded-xl outline-none transition-all font-bold">
+                      <option value="">Selecciona</option>
+                      <option value="Soltero/a">Soltero/a</option>
+                      <option value="Casado/a">Casado/a</option>
+                      <option value="Viudo/a">Viudo/a</option>
+                      <option value="Divorciado/a">Divorciado/a</option>
+                      <option value="Conviviente Civil">Conviviente Civil</option>
+                    </select>
+                  </div>
                 </div>
               </div>
               <div className="bg-slate-50 rounded-2xl p-6 space-y-4">

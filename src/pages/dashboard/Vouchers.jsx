@@ -133,7 +133,7 @@ export default function Vouchers() {
 
       list = list.filter(periodo => {
         // Extraer año del nombre del periodo (ej: "Cuota Mensual 2024" -> 2024)
-        const matchAnio = periodo.nombre?.match(/\b(20\d{2})\b/);
+        const matchAnio = periodo.nombre?.match(/(20\d{2})/);
         const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : null;
 
         // Si no tiene año en el nombre, permitirlo (periodos genéricos)

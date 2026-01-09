@@ -411,24 +411,42 @@ function EventModal({ stage, onClose, onReload }) {
         (c.style?.toLowerCase().includes(search.toLowerCase()))
     );
 
+    const [isAddingMode, setIsAddingMode] = useState(false);
+
     const addEvent = async (catalogId) => {
-        const currentCount = stage.competition_events?.length || 0;
-        const nextNum = currentCount + 1;
+        if (isAddingMode) return; // Prevenir múltiples clicks
 
-        const { error } = await supabase.from("competition_events").insert({
-            stage_id: stage.id,
-            catalog_id: catalogId,
-            event_number: nextNum
-        });
+        // 1. Validar si ya existe la prueba en esta etapa
+        const yaExiste = stage.competition_events?.some(ev => ev.event_catalog?.id === catalogId);
+        if (yaExiste) {
+            alert("Esta prueba ya fue agregada a esta etapa.");
+            return;
+        }
 
-        if (error) alert(error.message);
-        else onReload();
+        setIsAddingMode(true);
+        try {
+            // Fix: Calcular el siguiente número basado en el MÁXIMO existente para evitar duplicados si se borraron pruebas intermedias
+            const maxNum = stage.competition_events?.reduce((max, ev) => Math.max(max, ev.event_number || 0), 0) || 0;
+            const nextNum = maxNum + 1;
+
+            const { error } = await supabase.from("competition_events").insert({
+                stage_id: stage.id,
+                catalog_id: catalogId,
+                event_number: nextNum
+            });
+
+            if (error) throw error;
+            await onReload(); // Esperar a que recargue para tener la lista actualizada
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            setIsAddingMode(false);
+        }
     };
 
     const createAndAdd = async () => {
         const { data, error } = await supabase.from("event_catalog").insert({
-            ...newEvt,
-            name: `${newEvt.distance}m ${newEvt.style}`
+            ...newEvt
         }).select().single();
         if (error) { alert(error.message); return; }
         await addEvent(data.id);
@@ -480,15 +498,27 @@ function EventModal({ stage, onClose, onReload }) {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {filtered.map(item => (
-                                <div key={item.id} className="bg-white p-4 rounded-xl border flex justify-between items-center hover:shadow-md transition-shadow">
-                                    <div>
-                                        <p className="font-bold text-slate-900">{item.name}</p>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.category}</p>
+                            {filtered.map(item => {
+                                const isAdded = stage.competition_events?.some(ev => ev.event_catalog?.id === item.id);
+                                return (
+                                    <div key={item.id} className={`bg-white p-4 rounded-xl border flex justify-between items-center transition-shadow ${isAdded ? 'opacity-50' : 'hover:shadow-md'}`}>
+                                        <div>
+                                            <p className="font-bold text-slate-900">{item.name}</p>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.category}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => addEvent(item.id)}
+                                            disabled={isAdded || isAddingMode}
+                                            className={`px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest transition-all ${isAdded
+                                                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                                : "bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white"
+                                                }`}
+                                        >
+                                            {isAdded ? "Agregado" : (isAddingMode ? "..." : "Agregar")}
+                                        </button>
                                     </div>
-                                    <button onClick={() => addEvent(item.id)} className="bg-blue-50 text-blue-600 px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">Agregar</button>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>

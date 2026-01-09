@@ -186,40 +186,55 @@ export default function PagosMensuales() {
                     let proximoMes = 1;
                     let proximoAnio = new Date().getFullYear();
 
-                    if (ultimoPago && ultimoPago.mes) {
-                        proximoMes = ultimoPago.mes + 1;
-                        proximoAnio = ultimoPago.anio;
-                        if (proximoMes > 12) {
-                            proximoMes = 1;
-                            proximoAnio++;
-                        }
+                    // ✅ MODIFICACIÓN CRÍTICA: Prioridad al mes explícito del periodo
+                    // Si el periodo se llama "Pagos-Marzo2025", forzamos Marzo 2025
+                    const mesEspecifico = MESES.find(m => period.nombre.toLowerCase().includes(m.nombre.toLowerCase()));
+                    // Regex corregido: detectar año incluso si está pegado al texto (ej: Enero2025)
+                    const anioEspecificoMatch = period.nombre.match(/(20\d{2})/);
+                    const anioEspecifico = anioEspecificoMatch ? parseInt(anioEspecificoMatch[1]) : null;
+
+                    if (mesEspecifico && anioEspecifico) {
+                        // Caso 1: Periodo ESPECÍFICO (Ej: Marzo 2025) -> Forzar ese mes/año
+                        proximoMes = mesEspecifico.numero;
+                        proximoAnio = anioEspecifico;
+                        // NO aplicamos lógica de siguiente mes ni de fecha ingreso aquí
+                        // porque el admin explícitamente eligió "Marzo 2025"
                     } else {
-                        const matchAnio = period.nombre.match(/\d{4}/);
-                        if (matchAnio) proximoAnio = parseInt(matchAnio[0]);
-                        const mesMatch = MESES.find(m => period.nombre.toLowerCase().includes(m.nombre.toLowerCase()));
-                        if (mesMatch) proximoMes = mesMatch.numero;
-                    }
+                        // Caso 2: Periodo GENÉRICO (Ej: Cuota Mensual 2025) -> Calcular siguiente disponible
+                        if (ultimoPago && ultimoPago.mes) {
+                            proximoMes = ultimoPago.mes + 1;
+                            proximoAnio = ultimoPago.anio;
+                            if (proximoMes > 12) {
+                                proximoMes = 1;
+                                proximoAnio++;
+                            }
+                        } else {
+                            if (anioEspecifico) proximoAnio = anioEspecifico;
+                            // Si es genérico y no tiene pagos previos, empieza en Enero (o según fecha ingreso abajo)
+                        }
 
-                    // ✅ Si el socio tiene fecha de ingreso, ajustar el mes inicial
-                    if (profile?.fecha_ingreso) {
-                        const fechaIngreso = new Date(profile.fecha_ingreso);
-                        const mesIngreso = fechaIngreso.getMonth() + 1;
-                        const anioIngreso = fechaIngreso.getFullYear();
+                        // ✅ Si el socio tiene fecha de ingreso, ajustar el mes inicial SOLO para periodos genéricos
+                        if (profile?.fecha_ingreso) {
+                            const fechaIngreso = new Date(profile.fecha_ingreso);
+                            const mesIngreso = fechaIngreso.getMonth() + 1;
+                            const anioIngreso = fechaIngreso.getFullYear();
 
-                        // Si el próximo mes calculado es anterior a la fecha de ingreso, ajustar
-                        if (proximoAnio < anioIngreso || (proximoAnio === anioIngreso && proximoMes < mesIngreso)) {
-                            proximoMes = mesIngreso;
-                            proximoAnio = anioIngreso;
+                            // Si el próximo mes calculado es anterior a la fecha de ingreso, ajustar
+                            if (proximoAnio < anioIngreso || (proximoAnio === anioIngreso && proximoMes < mesIngreso)) {
+                                proximoMes = mesIngreso;
+                                proximoAnio = anioIngreso;
+                            }
                         }
                     }
 
                     let currMes = proximoMes;
                     let currAnio = proximoAnio;
                     for (let i = 0; i < cantidadCuotas; i++) {
-                        // ✅ Validar que no pase de diciembre 2025
-                        if (currAnio > 2025 || (currAnio === 2025 && currMes > 12)) {
-                            break; // No agregar más cuotas después de diciembre 2025
-                        }
+                        // ✅ Validar límite razonable (ej: 2040)
+                        if (currAnio > 2040) break;
+
+                        // ✅ NUEVO: Si el periodo es de un año específico (ej: 2026), NO pasar al siguiente año
+                        if (anioEspecifico && currAnio > anioEspecifico) break;
 
                         nuevasCuotas.push({ mes: currMes, anio: currAnio, cuota_numero: null, label: MESES[currMes - 1].nombre });
                         currMes++;
@@ -240,6 +255,11 @@ export default function PagosMensuales() {
                     }
                 }
                 setCuotasCalculadas(nuevasCuotas);
+
+                // ✅ Auto-corrige el input si el usuario pide más cuotas de las posibles (ej: pide 17 pero el año acaba en 12)
+                if (nuevasCuotas.length > 0 && nuevasCuotas.length < cantidadCuotas) {
+                    setCantidadCuotas(nuevasCuotas.length);
+                }
 
             } catch (err) {
                 console.error("Error calculando cuotas:", err);
@@ -576,18 +596,33 @@ export default function PagosMensuales() {
                                     // Si no hay socio seleccionado o no tiene fecha de ingreso, mostrar todos
                                     if (!socioProfile?.fecha_ingreso) return true;
 
-                                    const fechaIngreso = new Date(socioProfile.fecha_ingreso);
-                                    const anioIngreso = fechaIngreso.getFullYear();
+                                    // Parse safe de fecha ingreso (YYYY-MM-DD) para evitar timezone issues
+                                    const [y, m] = socioProfile.fecha_ingreso.split("-").map(Number);
+                                    const anioIngreso = y;
+                                    const mesIngreso = m; // 1-12
 
                                     // Extraer año del nombre del periodo
-                                    const matchAnio = p.nombre?.match(/\b(20\d{2})\b/);
+                                    const matchAnio = p.nombre?.match(/(20\d{2})/);
                                     const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : null;
 
-                                    // Si el periodo no tiene año, mostrarlo
+                                    // Si el periodo no tiene año explícito, lo mostramos (asumimos genérico o válido)
                                     if (!anioPeriodo) return true;
 
-                                    // Solo mostrar periodos del año de ingreso o posteriores
-                                    return anioPeriodo >= anioIngreso;
+                                    // 1. Si el año del periodo es anterior al año de ingreso -> OCULTAR
+                                    if (anioPeriodo < anioIngreso) return false;
+
+                                    // 2. Si es el mismo año, comprobamos si es un mes específico
+                                    if (anioPeriodo === anioIngreso) {
+                                        const mesPeriodo = MESES.find(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase()));
+
+                                        // Si tiene mes específico (ej: "Cuota Mayo"), y ese mes es menor al de ingreso -> OCULTAR
+                                        if (mesPeriodo && mesPeriodo.numero < mesIngreso) {
+                                            return false;
+                                        }
+                                    }
+
+                                    // En cualquier otro caso (mismo año pero mes >= ingreso, o año futuro), se muestra
+                                    return true;
                                 }).map(p => (
                                     <option key={p.id} value={p.id}>
                                         {p.nombre} ({p.concepto}) - ${p.monto.toLocaleString()}
@@ -654,13 +689,7 @@ export default function PagosMensuales() {
                                     ))}
                                 </div>
 
-                                {/* Advertencia si se alcanzó el límite de diciembre 2025 */}
-                                {cuotasCalculadas.length < cantidadCuotas && (
-                                    <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-800">
-                                        ⚠️ Solo se pueden registrar cuotas hasta Diciembre 2025.
-                                        Se registrarán {cuotasCalculadas.length} de {cantidadCuotas} cuotas solicitadas.
-                                    </div>
-                                )}
+
 
                                 <div className="mt-4 pt-4 border-t border-blue-200">
                                     <div className="flex justify-between items-center mb-2">

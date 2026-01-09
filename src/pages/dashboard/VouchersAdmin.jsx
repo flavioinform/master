@@ -21,6 +21,11 @@ const MESES = [
 
 const RANGE_ANIOS = Array.from({ length: 33 }, (_, i) => 2008 + i); // 2008 to 2040
 
+// Helper to normalize RUT (remove non-alphanumeric, lowercase)
+const normalizeRut = (rut) => {
+  return String(rut || "").replace(/[^0-9kK]/g, "").toLowerCase();
+};
+
 export default function VouchersAdmin() {
   const { user } = useContext(AppContext);
 
@@ -302,6 +307,22 @@ export default function VouchersAdmin() {
         console.log("✅ Periodo encontrado:", periodo);
       }
 
+      // 3. Pre-cargar usuarios para validación rápida y normalizada
+      const { data: allProfilesDB, error: errProfs } = await supabase
+        .from("profiles")
+        .select("id, rut");
+
+      if (errProfs) {
+        throw new Error("Error cargando perfiles: " + errProfs.message);
+      }
+
+      const rutMap = new Map();
+      allProfilesDB.forEach(p => {
+        if (p.rut) {
+          rutMap.set(normalizeRut(p.rut), p.id);
+        }
+      });
+
       // Procesar cada fila
       let exitosos = 0;
       let errores = 0;
@@ -309,27 +330,24 @@ export default function VouchersAdmin() {
 
       for (const row of jsonData) {
         try {
-          const rut = row.RUT?.toString().trim();
-          const monto = parseFloat(row.monto);
+          const rawRut = row.RUT?.toString().trim();
+          // Flexible amount field (monto, Monto, Pago, pago)
+          const monto = parseFloat(row.monto || row.Monto || row.Pago || row.pago);
 
-          if (!rut || !monto || isNaN(monto)) {
+          if (!rawRut || !monto || isNaN(monto)) {
             console.warn("⚠️ Fila inválida:", row);
             errores++;
             erroresDetalle.push(`Fila inválida: ${JSON.stringify(row)}`);
             continue;
           }
 
-          // Buscar usuario por RUT
-          const { data: usuario, error: userError } = await supabase
-            .from("profiles")
-            .select("id")
-            .eq("rut", rut)
-            .single();
+          const cleanRut = normalizeRut(rawRut);
+          const userId = rutMap.get(cleanRut);
 
-          if (userError || !usuario) {
-            console.warn(`⚠️ Usuario no encontrado: ${rut}`);
+          if (!userId) {
+            console.warn(`⚠️ Usuario no encontrado: ${rawRut} (Normalizado: ${cleanRut})`);
             errores++;
-            erroresDetalle.push(`Usuario no encontrado: ${rut}`);
+            erroresDetalle.push(`Usuario no encontrado: ${rawRut}`);
             continue;
           }
 
@@ -337,7 +355,7 @@ export default function VouchersAdmin() {
           const { error: insertError } = await supabase
             .from("vouchers")
             .insert({
-              user_id: usuario.id,
+              user_id: userId,
               period_id: periodo.id,
               monto_individual: monto,
               estado: "aprobado",
@@ -350,12 +368,12 @@ export default function VouchersAdmin() {
             });
 
           if (insertError) {
-            console.error(`❌ Error insertando ${rut}:`, insertError);
+            console.error(`❌ Error insertando ${rawRut}:`, insertError);
             errores++;
-            erroresDetalle.push(`Error insertando ${rut}: ${insertError.message}`);
+            erroresDetalle.push(`Error insertando ${rawRut}: ${insertError.message}`);
           } else {
             exitosos++;
-            console.log(`✅ Importado: ${rut} - $${monto}`);
+            console.log(`✅ Importado: ${rawRut} - $${monto}`);
           }
         } catch (err) {
           console.error("❌ Error procesando fila:", row, err);
