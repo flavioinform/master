@@ -3,6 +3,32 @@ import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import * as XLSX from "xlsx";
 
+const calcularCategoria = (fechaNacimiento) => {
+    if (!fechaNacimiento) return "";
+    const hoy = new Date();
+    const nac = new Date(fechaNacimiento);
+    let edad = hoy.getFullYear() - nac.getFullYear();
+    const m = hoy.getMonth() - nac.getMonth();
+    if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) {
+        edad--;
+    }
+
+    if (edad < 18) return "Menor de 18";
+    if (edad <= 24) return "18-24";
+    if (edad <= 29) return "25-29";
+    if (edad <= 34) return "30-34";
+    if (edad <= 39) return "35-39";
+    if (edad <= 44) return "40-44";
+    if (edad <= 49) return "45-49";
+    if (edad <= 54) return "50-54";
+    if (edad <= 59) return "55-59";
+    if (edad <= 64) return "60-64";
+    if (edad <= 69) return "65-69";
+    if (edad <= 74) return "70-74";
+    if (edad <= 79) return "75-79";
+    return "80+";
+};
+
 export default function CompetitionManager() {
     const { id } = useParams();
     const [competition, setCompetition] = useState(null);
@@ -120,6 +146,7 @@ export default function CompetitionManager() {
                     "Nombre": idx === 0 ? userData.nombre : "",
                     "RUT": idx === 0 ? userData.rut : "",
                     "Fecha Nacimiento": idx === 0 ? userData.fecha_nacimiento : "",
+                    "Categoría": idx === 0 ? calcularCategoria(userData.fecha_nacimiento) : "",
                     "Teléfono": idx === 0 ? userData.telefono : "",
                     "Talla": idx === 0 ? userData.talla : "",
                     "Etapa": evt.stage,

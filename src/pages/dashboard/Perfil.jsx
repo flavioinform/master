@@ -48,6 +48,7 @@ export default function Perfil() {
     talla: "",
     nacionalidad: "",
     estado_civil: "",
+    profesion: "",
   });
 
   const comunasTarapaca = [
@@ -98,6 +99,46 @@ export default function Perfil() {
     setIsAdmin(data?.rol === "directiva");
   };
 
+
+
+  const [profesionesList, setProfesionesList] = useState([]);
+  const [showProfessionModal, setShowProfessionModal] = useState(false);
+  const [newProfessionName, setNewProfessionName] = useState("");
+
+  const loadProfesiones = async () => {
+    const { data } = await supabase.from("profesiones").select("nombre, id").order("nombre", { ascending: true });
+    if (data) setProfesionesList(data);
+  };
+
+  const handleAddProfession = async (e) => {
+    e.preventDefault();
+    if (!newProfessionName.trim()) return;
+
+    // Verificar si ya existe en la lista local para evitar duplicados en UI o esperarnos al reload
+    const { error } = await supabase.from("profesiones").insert({ nombre: newProfessionName.trim() });
+    if (error) {
+      setMsg("Error al crear profesión: " + error.message);
+      setTipo("error");
+    } else {
+      setNewProfessionName("");
+      loadProfesiones();
+    }
+  };
+
+  const handleDeleteProfession = async (id) => {
+    if (!window.confirm("¿Seguro de eliminar esta profesión?")) return;
+    const { error } = await supabase.from("profesiones").delete().eq("id", id);
+    if (!error) loadProfesiones();
+    else {
+      setMsg("Error al eliminar: " + error.message);
+      setTipo("error");
+    }
+  };
+
+  useEffect(() => {
+    if (showProfessionModal) loadProfesiones();
+  }, [showProfessionModal]);
+
   const load = async (userId = null) => {
     setLoading(true);
     setMsg("");
@@ -107,9 +148,18 @@ export default function Perfil() {
     setSelectedUserId(targetId);
     setEditingOtherUser(!!userId && userId !== user.id);
 
+    // 1. Cargar lista de profesiones
+    const { data: profs } = await supabase
+      .from("profesiones")
+      .select("nombre")
+      .order("nombre", { ascending: true });
+
+    if (profs) setProfesionesList(profs);
+
+    // 2. Cargar perfil
     const { data, error } = await supabase
       .from("profiles")
-      .select("nombre_completo,rut,fecha_nacimiento,telefono,direccion,comuna,fecha_ingreso,numero_cuenta,banco,email,talla,nacionalidad,estado_civil")
+      .select("nombre_completo,rut,fecha_nacimiento,telefono,direccion,comuna,fecha_ingreso,numero_cuenta,banco,email,talla,nacionalidad,estado_civil,profesion")
       .eq("id", targetId)
       .single();
 
@@ -121,16 +171,17 @@ export default function Perfil() {
         nombre_completo: data.nombre_completo || "",
         rut: data.rut || "",
         fecha_nacimiento: data.fecha_nacimiento || "",
-        telefono: data.telefono || "+569", // ✅ Default prefix
+        telefono: data.telefono || "+569",
         direccion: data.direccion || "",
-        comuna: data.comuna || "Iquique", // Default Iquique
+        comuna: data.comuna || "Iquique",
         fecha_ingreso: data.fecha_ingreso || "",
         numero_cuenta: data.numero_cuenta || "",
         banco: data.banco || "",
         email: data.email || "",
         talla: data.talla || "",
-        nacionalidad: data.nacionalidad || "Chilena",
+        nacionalidad: data.nacionalidad || "",
         estado_civil: data.estado_civil || "",
+        profesion: data.profesion || "",
       });
     }
 
@@ -258,14 +309,24 @@ export default function Perfil() {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Configuración de Cuenta</h1>
           <p className="text-slate-500 text-sm font-medium">Gestiona tu información personal y bancaria</p>
         </div>
-        <a
-          href="https://drive.google.com/file/d/1CmP0ghICjEqGLuuwmswwNyQtxTq0hF0m/view?usp=drive_link"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="bg-sky-50 text-sky-600 hover:bg-sky-100 px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2"
-        >
-          <span className="w-5 h-5 bg-sky-600 text-white rounded-full flex items-center justify-center text-xs">?</span> Ayuda
-        </a>
+        <div className="flex gap-3">
+          {isAdmin && (
+            <button
+              onClick={() => setShowProfessionModal(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg shadow-indigo-100 transition-all flex items-center gap-2"
+            >
+              <span>💼</span> Profesiones
+            </button>
+          )}
+          <a
+            href="https://drive.google.com/file/d/1CmP0ghICjEqGLuuwmswwNyQtxTq0hF0m/view?usp=drive_link"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-sky-50 text-sky-600 hover:bg-sky-100 px-4 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center gap-2"
+          >
+            <span className="w-5 h-5 bg-sky-600 text-white rounded-full flex items-center justify-center text-xs">?</span> Ayuda
+          </a>
+        </div>
       </div>
 
       {/* Admin Search Bar */}
@@ -412,12 +473,38 @@ export default function Perfil() {
             {/* Nuevos Campos: Nacionalidad y Estado Civil */}
             <div>
               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Nacionalidad</label>
-              <input
-                className="w-full bg-slate-50 border-none ring-1 ring-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-blue-500/30 focus:bg-white outline-none transition-all font-medium text-slate-700 text-sm"
+              <select
+                className="w-full bg-slate-50 border-none ring-1 ring-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-blue-500/30 focus:bg-white outline-none transition-all appearance-none font-medium text-slate-700 text-sm"
                 value={form.nacionalidad}
                 onChange={(e) => onChange("nacionalidad", e.target.value)}
-                placeholder="Chilena"
-              />
+              >
+                <option value="">Seleccionar...</option>
+                <option value="Chilena">Chilena</option>
+                <option value="Venezolana">Venezolana</option>
+                <option value="Peruana">Peruana</option>
+                <option value="Colombiana">Colombiana</option>
+                <option value="Boliviana">Boliviana</option>
+                <option value="Argentina">Argentina</option>
+                <option value="Ecuatoriana">Ecuatoriana</option>
+                <option value="Haitiana">Haitiana</option>
+                <option value="Brasileña">Brasileña</option>
+                <option value="Española">Española</option>
+                <option value="Otra">Otra</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 block">Profesión / Oficio</label>
+              <select
+                className="w-full bg-slate-50 border-none ring-1 ring-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-blue-500/30 focus:bg-white outline-none transition-all appearance-none font-medium text-slate-700 text-sm"
+                value={form.profesion}
+                onChange={(e) => onChange("profesion", e.target.value)}
+              >
+                <option value="">Seleccionar...</option>
+                {profesionesList.map((p) => (
+                  <option key={p.nombre} value={p.nombre}>{p.nombre}</option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -589,6 +676,62 @@ export default function Perfil() {
           </button>
         </div>
       </form>
+      {/* Modal - Manage Professions */}
+      {showProfessionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 space-y-6 border border-indigo-50 animate-in fade-in zoom-in duration-300">
+            <div className="flex justify-between items-center">
+              <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Gestionar Profesiones</h3>
+              <button
+                onClick={() => setShowProfessionModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100">
+              <p className="text-xs text-indigo-900 leading-tight">
+                Agrega las profesiones que estarán disponibles en el perfil de los socios.
+              </p>
+            </div>
+
+            <form onSubmit={handleAddProfession} className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Nueva profesión..."
+                value={newProfessionName}
+                onChange={(e) => setNewProfessionName(e.target.value)}
+                className="flex-1 px-4 py-3 bg-slate-50 border-2 border-transparent focus:border-indigo-500 focus:bg-white rounded-xl outline-none transition-all font-bold text-sm"
+              />
+              <button
+                type="submit"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl font-bold text-sm shadow-lg shadow-indigo-100 transition-all"
+              >
+                +
+              </button>
+            </form>
+
+            <div className="max-h-64 overflow-y-auto space-y-2 pr-2">
+              {profesionesList.map((p) => (
+                <div key={p.id} className="flex justify-between items-center p-3 bg-slate-50 rounded-xl group hover:bg-white hover:shadow-md transition-all border border-transparent hover:border-slate-100">
+                  <span className="text-sm font-bold text-slate-700">{p.nombre}</span>
+                  <button
+                    onClick={() => handleDeleteProfession(p.id)}
+                    className="text-slate-300 hover:text-rose-500 transition-colors p-1"
+                    title="Eliminar"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              ))}
+              {profesionesList.length === 0 && (
+                <p className="text-center text-slate-400 text-xs italic py-4">No hay profesiones creadas.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

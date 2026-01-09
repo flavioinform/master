@@ -2,6 +2,33 @@ import { useEffect, useState, useContext } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { AppContext } from "@/context/AppContext";
+import * as XLSX from "xlsx";
+
+const calcularCategoria = (fechaNacimiento) => {
+  if (!fechaNacimiento) return "";
+  const hoy = new Date();
+  const nac = new Date(fechaNacimiento);
+  let edad = hoy.getFullYear() - nac.getFullYear();
+  const m = hoy.getMonth() - nac.getMonth();
+  if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) {
+    edad--;
+  }
+
+  if (edad < 18) return "Menor de 18";
+  if (edad <= 24) return "18-24";
+  if (edad <= 29) return "25-29";
+  if (edad <= 34) return "30-34";
+  if (edad <= 39) return "35-39";
+  if (edad <= 44) return "40-44";
+  if (edad <= 49) return "45-49";
+  if (edad <= 54) return "50-54";
+  if (edad <= 59) return "55-59";
+  if (edad <= 64) return "60-64";
+  if (edad <= 69) return "65-69";
+  if (edad <= 74) return "70-74";
+  if (edad <= 79) return "75-79";
+  return "80+";
+};
 
 export default function ConvocatoriaInscripcion() {
   const { id } = useParams(); // Competition ID
@@ -179,6 +206,59 @@ export default function ConvocatoriaInscripcion() {
     };
   };
 
+  const handleExportExcel = () => {
+    // Definir las columnas
+    const headers = [
+      "Nombre", "RUT", "Fecha Nacimiento", "Categoría", "Teléfono", "Talla",
+      "Etapa", "N° Prueba", "Prueba", "Tiempo"
+    ];
+
+    const dataRows = [];
+    let isFirstRow = true;
+
+    // Recorrer pruebas seleccionadas para construir las filas
+    stages.forEach(stage => {
+      const stageEvents = stage.competition_events.filter(evt => selectedEvents[evt.id]?.selected);
+
+      stageEvents.forEach(evt => {
+        const eventData = selectedEvents[evt.id];
+
+        // Solo mostrar datos del usuario en la primera fila (o repetir si prefiere, 
+        // pero la imagen parece mostrar estilo "merged" visualmente o vacíos)
+        // El usuario dijo "ese mismo formato" refiriendo a la imagen de admin que deja vacíos.
+        const nombre = isFirstRow ? profile?.nombre_completo : "";
+        const rut = isFirstRow ? profile?.rut : "";
+        const fechaNac = isFirstRow ? profile?.fecha_nacimiento : "";
+        const categoria = isFirstRow ? calcularCategoria(profile?.fecha_nacimiento) : "";
+        const telefono = isFirstRow ? profile?.telefono : "";
+        const talla = isFirstRow ? (profile?.talla || "S/N") : "";
+
+        dataRows.push([
+          nombre,
+          rut,
+          fechaNac,
+          categoria,
+          telefono,
+          talla,
+          stage.name,
+          evt.event_number,
+          `${evt.event_catalog?.name} (${evt.event_catalog?.distance}m ${evt.event_catalog?.style})`,
+          eventData.time || "Sin tiempo"
+        ]);
+
+        isFirstRow = false;
+      });
+    });
+
+    // Crear hoja de trabajo
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Inscripciones");
+
+    // Nombre del archivo
+    XLSX.writeFile(wb, `Inscripcion_${profile?.rut}_${competition.name.substring(0, 15)}.xlsx`);
+  };
+
   // Styles for printing the "Ficha"
   const printStyles = `
     @media print {
@@ -293,13 +373,13 @@ export default function ConvocatoriaInscripcion() {
             </div>
           </div>
           <button
-            onClick={() => window.print()}
+            onClick={handleExportExcel}
             className="group relative overflow-hidden bg-white text-slate-900 px-10 py-5 rounded-2xl font-black text-lg transition-all flex items-center justify-center gap-3 shadow-lg shadow-white/10 active:scale-95 whitespace-nowrap"
           >
             <span className="relative z-10 flex items-center gap-2 uppercase tracking-tight">
-              <span className="text-2xl">📥</span> Descargar Ficha
+              <span className="text-2xl">📊</span> Exportar Excel
             </span>
-            <div className="absolute inset-0 bg-blue-500 translate-y-full group-hover:translate-y-0 transition-transform duration-300 -z-0"></div>
+            <div className="absolute inset-0 bg-emerald-500 translate-y-full group-hover:translate-y-0 transition-transform duration-300 -z-0"></div>
           </button>
         </div>
       </div>
