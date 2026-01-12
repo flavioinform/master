@@ -76,6 +76,7 @@ export default function Perfil() {
     "Banco BICE",
     "Banco BTG Pactual",
     "Coopeuch",
+    "MercadoPago",
     "Otro"
   ];
 
@@ -114,14 +115,34 @@ export default function Perfil() {
     e.preventDefault();
     if (!newProfessionName.trim()) return;
 
+    // 🔍 DEBUG: Verificar rol del usuario actual
+    const { data: userData } = await supabase.auth.getUser();
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("rol, nombre_completo")
+      .eq("id", userData?.user?.id)
+      .single();
+
+    console.log("👤 Usuario actual:", profileData);
+    console.log("🔑 Rol:", profileData?.rol);
+
     // Verificar si ya existe en la lista local para evitar duplicados en UI o esperarnos al reload
     const { error } = await supabase.from("profesiones").insert({ nombre: newProfessionName.trim() });
     if (error) {
-      setMsg("Error al crear profesión: " + error.message);
+      console.error("❌ Error completo:", error);
+
+      // Mensaje más detallado para errores de RLS
+      if (error.code === "42501" || error.message.includes("policy")) {
+        setMsg(`⚠️ Error de permisos: Tu rol es "${profileData?.rol}". Solo usuarios con rol "directiva" pueden agregar profesiones.`);
+      } else {
+        setMsg("Error al crear profesión: " + error.message);
+      }
       setTipo("error");
     } else {
       setNewProfessionName("");
       loadProfesiones();
+      setMsg("✅ Profesión agregada correctamente");
+      setTipo("success");
     }
   };
 

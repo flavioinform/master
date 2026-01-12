@@ -472,6 +472,8 @@ export default function PagosMensuales() {
             <div className="bg-gradient-to-r from-blue-600 to-cyan-600 rounded-3xl p-8 text-white shadow-2xl">
                 <h1 className="text-4xl font-black mb-2">💰 Pagos Mensuales</h1>
                 <p className="text-blue-100 text-lg">Sistema simplificado para registrar cuotas mensuales</p>
+
+
             </div>
 
             {/* Mensaje */}
