@@ -33,7 +33,7 @@ export default function PagosMensuales() {
     const [monto, setMonto] = useState("");
     const [estado, setEstado] = useState("pagado");
     const [comprobante, setComprobante] = useState(null);
-    const [observaciones, setObservaciones] = useState("");
+    // Observaciones field removed
     const [cantidadCuotas, setCantidadCuotas] = useState(1);
     const [cuotasCalculadas, setCuotasCalculadas] = useState([]);
 
@@ -118,22 +118,44 @@ export default function PagosMensuales() {
             setPeriodos(periodosData || []);
 
             // ✅ Cargar Vouchers (Unified System)
-            // Filtramos aquellos que parezcan mensuales (tengan mes/anio o sean de periodos mensuales)
             const { data, error } = await supabase
                 .from("vouchers")
-                .select(`
-                  *,
-                  profiles:user_id (nombre_completo, rut),
-                  payment_periods:period_id (nombre, concepto)
-                `)
-                .not("mes", "is", null) // Solo los que tienen mes definido (nuevo sistema)
+                .select("*")
+                .not("mes", "is", null)
                 .order("anio", { ascending: false })
                 .order("mes", { ascending: false });
 
             if (error) throw error;
-            setPagos(data || []);
+
+            // ✅ Cargar perfiles y periodos por separado para evitar errores de relación
+            if (data && data.length > 0) {
+                const userIds = [...new Set(data.map(v => v.user_id))];
+                const periodIds = [...new Set(data.map(v => v.period_id).filter(Boolean))];
+
+                const { data: profilesData } = await supabase
+                    .from("profiles")
+                    .select("id, nombre_completo, rut")
+                    .in("id", userIds);
+
+                const { data: periodsData } = await supabase
+                    .from("payment_periods")
+                    .select("id, nombre, concepto, monto")
+                    .in("id", periodIds);
+
+                // Mapear los datos manualmente
+                const enrichedData = data.map(voucher => ({
+                    ...voucher,
+                    profiles: profilesData?.find(p => p.id === voucher.user_id),
+                    payment_periods: periodsData?.find(p => p.id === voucher.period_id)
+                }));
+
+                setPagos(enrichedData);
+            } else {
+                setPagos([]);
+            }
         } catch (error) {
             console.error("Error cargando pagos:", error);
+            console.error("Error details:", error.message, error.code, error.details);
         }
     };
 
@@ -377,7 +399,7 @@ export default function PagosMensuales() {
                     monto_individual: parseFloat(monto), // ✅ Monto por cuota (sin dividir)
                     estado: estado === 'pagado' ? 'aprobado' : 'pendiente',
                     archivo_path: comprobantesUrls[idxOriginal] || null, // ✅ Comprobante del índice original
-                    comentario: observaciones || null,
+                    comentario: null, // Observaciones removed
                     revisado_por: estado === 'pagado' ? user.id : null,
                     total_cuotas: periodos.find(p => p.id === periodoId)?.total_cuotas || 1
                 };
@@ -413,11 +435,17 @@ export default function PagosMensuales() {
             setComprobante(null);
             setComprobantesIndividuales({}); // ✅ Limpiar comprobantes individuales
             setModoComprobante("unico"); // ✅ Resetear a modo único
-            setObservaciones("");
+            // Observaciones reset removed
             setCantidadCuotas(1);
 
             // Recargar pagos
             await cargarPagos();
+
+            // ✅ Recargar página tras éxito (Refresh)
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+
         } catch (error) {
             console.error("Error registrando pago:", error);
             setMsg(error.message || "Error al registrar el pago");
@@ -450,19 +478,29 @@ export default function PagosMensuales() {
 
     // Filtrar pagos
     const pagosFiltrados = pagos.filter(p => {
-        const matchAnio = filtroAnio === "todos" || p.anio === parseInt(filtroAnio);
-        const matchMes = filtroMes === "todos" || p.mes === parseInt(filtroMes);
+        // ✅ 1. Prioridad: Socio seleccionado en formulario (Ignora todo lo demás)
+        if (socioSeleccionado) {
+            return p.user_id === socioSeleccionado;
+        }
+
         const matchBusqueda = !busqueda ||
             p.profiles?.nombre_completo?.toLowerCase().includes(busqueda.toLowerCase()) ||
             p.profiles?.rut?.toLowerCase().includes(busqueda.toLowerCase());
 
-        return matchAnio && matchMes && matchBusqueda;
+        // ✅ 2. Si hay búsqueda manual, ignorar filtros de año/mes
+        if (busqueda && matchBusqueda) return true;
+        if (busqueda && !matchBusqueda) return false;
+
+        const matchAnio = filtroAnio === "todos" || p.anio === parseInt(filtroAnio);
+        const matchMes = filtroMes === "todos" || p.mes === parseInt(filtroMes);
+
+        return matchAnio && matchMes;
     });
 
     // Calcular totales
     const totalRecaudado = pagosFiltrados
-        .filter(p => p.estado === "pagado")
-        .reduce((sum, p) => sum + parseFloat(p.monto || 0), 0);
+        .filter(p => p.estado === "pagado" || p.estado === "aprobado")
+        .reduce((sum, p) => sum + parseFloat(p.monto_individual || 0), 0);
 
     if (loading) return <div className="p-6">Cargando...</div>;
 
@@ -496,88 +534,85 @@ export default function PagosMensuales() {
                 </h2>
 
                 <form onSubmit={registrarPago} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Grid Principal - 3 Columnas en Desktop */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-                        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {/* Fecha de Pago */}
-                            <div>
-                                <label className="block text-xl font-bold text-gray-700 mb-3">
-                                    <Calendar className="inline h-6 w-6 mr-2" />
-                                    Fecha de Pago
-                                </label>
-                                <input
-                                    type="date"
-                                    value={fechaPago}
-                                    onChange={(e) => setFechaPago(e.target.value)}
-                                    className="w-full text-xl p-5 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold"
-                                    required
-                                />
-                            </div>
-
-                            {/* Socio Searchable */}
-                            <div className="relative">
-                                <label className="block text-xl font-bold text-gray-700 mb-3">
-                                    <User className="inline h-6 w-6 mr-2" />
-                                    Socio
-                                </label>
-                                <div className="relative">
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar por Nombre o RUT..."
-                                        value={busquedaSocio}
-                                        onFocus={() => setMostrarDropdownSocios(true)}
-                                        onClick={() => setMostrarDropdownSocios(true)}
-                                        onChange={(e) => {
-                                            setBusquedaSocio(e.target.value);
-                                            setMostrarDropdownSocios(true);
-                                            // Validate if clearing clears selection
-                                            if (e.target.value === "") setSocioSeleccionado("");
-                                        }}
-                                        className="w-full text-xl p-5 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold"
-                                    />
-                                    {/* Clear button if selected */}
-                                    {socioSeleccionado && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setSocioSeleccionado("");
-                                                setBusquedaSocio("");
-                                            }}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"
-                                        >
-                                            <span className="text-xl font-bold">✕</span>
-                                        </button>
-                                    )}
-                                </div>
-
-                                {mostrarDropdownSocios && busquedaSocio && !socioSeleccionado && (
-                                    <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
-                                        {sociosFiltrados.length > 0 ? (
-                                            sociosFiltrados.map(socio => (
-                                                <button
-                                                    key={socio.id}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setSocioSeleccionado(socio.id);
-                                                        setBusquedaSocio(`${socio.nombre_completo} - ${socio.rut}`);
-                                                        setMostrarDropdownSocios(false);
-                                                    }}
-                                                    className="w-full text-left p-4 hover:bg-blue-50 border-b border-gray-100 last:border-0 transition-colors"
-                                                >
-                                                    <div className="font-bold text-gray-800">{socio.nombre_completo}</div>
-                                                    <div className="text-sm text-gray-500">{socio.rut}</div>
-                                                </button>
-                                            ))
-                                        ) : (
-                                            <div className="p-4 text-gray-500 italic text-center">No se encontraron socios</div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
+                        {/* Columna 1: Fecha de Pago */}
+                        <div>
+                            <label className="block text-xl font-bold text-gray-700 mb-3">
+                                <Calendar className="inline h-6 w-6 mr-2" />
+                                Fecha de Pago
+                            </label>
+                            <input
+                                type="date"
+                                value={fechaPago}
+                                onChange={(e) => setFechaPago(e.target.value)}
+                                className="w-full text-xl p-4 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold"
+                                required
+                            />
                         </div>
 
-                        {/* Tipo de Pago / Periodo */}
-                        <div className="md:col-span-2">
+                        {/* Columna 2: Socio Searchable */}
+                        <div className="relative">
+                            <label className="block text-xl font-bold text-gray-700 mb-3">
+                                <User className="inline h-6 w-6 mr-2" />
+                                Socio
+                            </label>
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por Nombre o RUT..."
+                                    value={busquedaSocio}
+                                    onFocus={() => setMostrarDropdownSocios(true)}
+                                    onClick={() => setMostrarDropdownSocios(true)}
+                                    onChange={(e) => {
+                                        setBusquedaSocio(e.target.value);
+                                        setMostrarDropdownSocios(true);
+                                        if (e.target.value === "") setSocioSeleccionado("");
+                                    }}
+                                    className="w-full text-xl p-4 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold"
+                                />
+                                {socioSeleccionado && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setSocioSeleccionado("");
+                                            setBusquedaSocio("");
+                                        }}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"
+                                    >
+                                        <span className="text-xl font-bold">✕</span>
+                                    </button>
+                                )}
+                            </div>
+
+                            {mostrarDropdownSocios && busquedaSocio && !socioSeleccionado && (
+                                <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-2xl shadow-xl max-h-60 overflow-y-auto">
+                                    {sociosFiltrados.length > 0 ? (
+                                        sociosFiltrados.map(socio => (
+                                            <button
+                                                key={socio.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    setSocioSeleccionado(socio.id);
+                                                    setBusquedaSocio(`${socio.nombre_completo} - ${socio.rut}`);
+                                                    setMostrarDropdownSocios(false);
+                                                }}
+                                                className="w-full text-left p-4 hover:bg-blue-50 border-b border-gray-100 last:border-0 transition-colors"
+                                            >
+                                                <div className="font-bold text-gray-800">{socio.nombre_completo}</div>
+                                                <div className="text-sm text-gray-500">{socio.rut}</div>
+                                            </button>
+                                        ))
+                                    ) : (
+                                        <div className="p-4 text-gray-500 italic text-center">No se encontraron socios</div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Columna 3: Tipo de Pago */}
+                        <div>
                             <label className="block text-xl font-bold text-gray-700 mb-3">
                                 <FileText className="inline h-6 w-6 mr-2" />
                                 Tipo de Pago
@@ -590,40 +625,23 @@ export default function PagosMensuales() {
                                     const sel = periodos.find(p => p.id === pid);
                                     if (sel) setMonto(sel.monto);
                                 }}
-                                className="w-full text-xl p-5 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold"
+                                className="w-full text-xl p-4 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold"
                                 required
                             >
                                 <option value="">Selecciona el tipo de pago...</option>
                                 {periodos.filter(p => {
-                                    // Si no hay socio seleccionado o no tiene fecha de ingreso, mostrar todos
                                     if (!socioProfile?.fecha_ingreso) return true;
-
-                                    // Parse safe de fecha ingreso (YYYY-MM-DD) para evitar timezone issues
                                     const [y, m] = socioProfile.fecha_ingreso.split("-").map(Number);
                                     const anioIngreso = y;
-                                    const mesIngreso = m; // 1-12
-
-                                    // Extraer año del nombre del periodo
+                                    const mesIngreso = m;
                                     const matchAnio = p.nombre?.match(/(20\d{2})/);
                                     const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : null;
-
-                                    // Si el periodo no tiene año explícito, lo mostramos (asumimos genérico o válido)
                                     if (!anioPeriodo) return true;
-
-                                    // 1. Si el año del periodo es anterior al año de ingreso -> OCULTAR
                                     if (anioPeriodo < anioIngreso) return false;
-
-                                    // 2. Si es el mismo año, comprobamos si es un mes específico
                                     if (anioPeriodo === anioIngreso) {
                                         const mesPeriodo = MESES.find(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase()));
-
-                                        // Si tiene mes específico (ej: "Cuota Mayo"), y ese mes es menor al de ingreso -> OCULTAR
-                                        if (mesPeriodo && mesPeriodo.numero < mesIngreso) {
-                                            return false;
-                                        }
+                                        if (mesPeriodo && mesPeriodo.numero < mesIngreso) return false;
                                     }
-
-                                    // En cualquier otro caso (mismo año pero mes >= ingreso, o año futuro), se muestra
                                     return true;
                                 }).map(p => (
                                     <option key={p.id} value={p.id}>
@@ -633,7 +651,7 @@ export default function PagosMensuales() {
                             </select>
                         </div>
 
-                        {/* Cantidad de Cuotas */}
+                        {/* Fila 2 - Columna 1: Cantidad de Cuotas */}
                         <div>
                             <label className="block text-xl font-bold text-gray-700 mb-3">
                                 <DollarSign className="inline h-6 w-6 mr-2" />
@@ -643,7 +661,7 @@ export default function PagosMensuales() {
                                 type="number"
                                 value={cantidadCuotas}
                                 onChange={(e) => setCantidadCuotas(Math.max(1, parseInt(e.target.value) || 1))}
-                                className={`w-full text-xl p-5 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold ${periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase())))
+                                className={`w-full text-xl p-4 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold ${periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase())))
                                     ? "bg-gray-100 text-gray-500 cursor-not-allowed"
                                     : ""
                                     }`}
@@ -651,13 +669,12 @@ export default function PagosMensuales() {
                                 required
                                 disabled={periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase())))}
                             />
-                            {/* Visual Hint */}
                             {periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase()))) && (
-                                <p className="text-sm text-blue-600 mt-2 font-bold ml-1">🔒 Fijo en 1 cuota para periodos mensuales específicos</p>
+                                <p className="text-sm text-blue-600 mt-2 font-bold ml-1">🔒 Fijo en 1 cuota</p>
                             )}
                         </div>
 
-                        {/* Monto (por cuota) */}
+                        {/* Fila 2 - Columna 2: Monto por Cuota */}
                         <div>
                             <label className="block text-xl font-bold text-gray-700 mb-3">
                                 <DollarSign className="inline h-6 w-6 mr-2" />
@@ -667,7 +684,7 @@ export default function PagosMensuales() {
                                 type="number"
                                 value={monto}
                                 onChange={(e) => setMonto(e.target.value)}
-                                className="w-full text-xl p-5 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold"
+                                className="w-full text-xl p-4 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold"
                                 placeholder="15000"
                                 min="0"
                                 step="100"
@@ -675,14 +692,117 @@ export default function PagosMensuales() {
                             />
                         </div>
 
+                        {/* Fila 2 - Columna 3: Estado */}
+                        <div>
+                            <label className="block text-xl font-bold text-gray-700 mb-3">Estado</label>
+                            <div className="flex gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setEstado("pagado")}
+                                    className={`flex-1 p-4 rounded-xl font-black text-lg transition-all ${estado === "pagado"
+                                        ? "bg-green-600 text-white shadow-lg scale-105"
+                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                        }`}
+                                >
+                                    <Check className="inline h-5 w-5 mr-1" />
+                                    Pagado
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setEstado("pendiente")}
+                                    className={`flex-1 p-4 rounded-xl font-black text-lg transition-all ${estado === "pendiente"
+                                        ? "bg-yellow-500 text-white shadow-lg scale-105"
+                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                                        }`}
+                                >
+                                    <Clock className="inline h-5 w-5 mr-1" />
+                                    Pendiente
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Fila 3 - Columna Completa: Comprobante */}
+                        <div className="md:col-span-3 bg-gray-50 p-6 rounded-2xl border-2 border-dashed border-gray-300">
+                            <label className="block text-xl font-bold text-gray-700 mb-4">
+                                Comprobante (Opcional)
+                            </label>
+
+                            <div className="flex gap-4 mb-4">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setModoComprobante("unico");
+                                        setComprobantesIndividuales({});
+                                    }}
+                                    className={`flex-1 p-3 rounded-xl font-bold transition-all ${modoComprobante === "unico"
+                                        ? "bg-blue-600 text-white shadow-md"
+                                        : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                                        }`}
+                                >
+                                    📄 Un comprobante general
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setModoComprobante("individual");
+                                        setComprobante(null);
+                                    }}
+                                    className={`flex-1 p-3 rounded-xl font-bold transition-all ${modoComprobante === "individual"
+                                        ? "bg-blue-600 text-white shadow-md"
+                                        : "bg-white text-gray-600 hover:bg-gray-100 border border-gray-200"
+                                        }`}
+                                >
+                                    📑 Comprobante por cuota
+                                </button>
+                            </div>
+
+                            {modoComprobante === "unico" ? (
+                                <input
+                                    type="file"
+                                    accept="image/*,application/pdf"
+                                    onChange={(e) => setComprobante(e.target.files[0])}
+                                    className="w-full text-lg p-3 border border-gray-300 rounded-xl file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                />
+                            ) : (
+                                <div className="space-y-3">
+                                    {cuotasCalculadas.length === 0 ? (
+                                        <p className="text-gray-400 italic text-center">
+                                            Selecciona un socio y periodo para ver las cuotas
+                                        </p>
+                                    ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            {cuotasCalculadas.map((cuota, idx) => (
+                                                <div key={idx} className="flex flex-col gap-2 bg-white p-3 rounded-xl border border-gray-200">
+                                                    <span className="font-bold text-gray-700 text-sm">
+                                                        {MESES.find(m => m.numero === cuota.mes)?.nombre} {cuota.anio}
+                                                    </span>
+                                                    <input
+                                                        type="file"
+                                                        accept="image/*,application/pdf"
+                                                        onChange={(e) => {
+                                                            setComprobantesIndividuales(prev => ({
+                                                                ...prev,
+                                                                [idx]: e.target.files[0]
+                                                            }));
+                                                        }}
+                                                        className="text-xs p-1 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-blue-50 file:text-blue-700"
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
                         {/* Preview de Cuotas */}
                         {cuotasCalculadas.length > 0 && (
-                            <div className="md:col-span-2 bg-blue-50 border-2 border-blue-100 rounded-3xl p-6">
+                            <div className="md:col-span-3 bg-blue-50 border-2 border-blue-100 rounded-3xl p-6 mt-4">
                                 <h3 className="text-xl font-black text-blue-900 mb-4 flex items-center gap-2">
                                     <Calendar className="h-6 w-6" />
                                     Distribución de Cuotas ({cuotasCalculadas.length})
                                 </h3>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
                                     {cuotasCalculadas.map((c, idx) => (
                                         <div key={idx} className="bg-white p-3 rounded-xl border border-blue-200 shadow-sm text-center">
                                             <div className="text-blue-600 font-black">{MESES.find(m => m.numero === c.mes)?.nombre}</div>
@@ -690,8 +810,6 @@ export default function PagosMensuales() {
                                         </div>
                                     ))}
                                 </div>
-
-
 
                                 <div className="mt-4 pt-4 border-t border-blue-200">
                                     <div className="flex justify-between items-center mb-2">
@@ -706,140 +824,21 @@ export default function PagosMensuales() {
                                             ${monto && cuotasCalculadas.length > 0 ? (parseFloat(monto) * cuotasCalculadas.length).toLocaleString('es-CL') : '0'}
                                         </span>
                                     </div>
-                                    <div className="text-xs text-gray-600 mt-2 text-right">
-                                        {cuotasCalculadas.length} cuota(s) × ${monto ? parseFloat(monto).toLocaleString('es-CL') : '0'}
-                                    </div>
                                 </div>
                             </div>
                         )}
+
+                        {/* Observaciones - Full Width */}
+                        {/* Observaciones Removed */}
+                        <div className="md:col-span-3"></div>
+
                     </div>
-
-                    {/* Estado */}
-                    <div>
-                        <label className="block text-xl font-bold text-gray-700 mb-3">Estado</label>
-                        <div className="flex gap-4">
-                            <button
-                                type="button"
-                                onClick={() => setEstado("pagado")}
-                                className={`flex-1 p-5 rounded-2xl font-black text-xl transition-all ${estado === "pagado"
-                                    ? "bg-green-600 text-white shadow-lg scale-105"
-                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                    }`}
-                            >
-                                <Check className="inline h-6 w-6 mr-2" />
-                                Pagado
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setEstado("pendiente")}
-                                className={`flex-1 p-5 rounded-2xl font-black text-xl transition-all ${estado === "pendiente"
-                                    ? "bg-yellow-500 text-white shadow-lg scale-105"
-                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                    }`}
-                            >
-                                <Clock className="inline h-6 w-6 mr-2" />
-                                Pendiente
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Comprobante */}
-                    <div className="md:col-span-2">
-                        <label className="block text-xl font-bold text-gray-700 mb-3">
-                            Comprobante (Opcional)
-                        </label>
-
-                        {/* Toggle para seleccionar modo */}
-                        <div className="flex gap-4 mb-4">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setModoComprobante("unico");
-                                    setComprobantesIndividuales({});
-                                }}
-                                className={`flex-1 p-4 rounded-xl font-bold transition-all ${modoComprobante === "unico"
-                                    ? "bg-blue-600 text-white shadow-lg"
-                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                    }`}
-                            >
-                                📄 Un comprobante para todas
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setModoComprobante("individual");
-                                    setComprobante(null);
-                                }}
-                                className={`flex-1 p-4 rounded-xl font-bold transition-all ${modoComprobante === "individual"
-                                    ? "bg-blue-600 text-white shadow-lg"
-                                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                    }`}
-                            >
-                                📑 Comprobante por cuota
-                            </button>
-                        </div>
-
-                        {/* Input según modo seleccionado */}
-                        {modoComprobante === "unico" ? (
-                            <input
-                                type="file"
-                                accept="image/*,application/pdf"
-                                onChange={(e) => setComprobante(e.target.files[0])}
-                                className="w-full text-lg p-4 border-2 border-dashed border-gray-300 rounded-2xl file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-lg file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                            />
-                        ) : (
-                            <div className="space-y-3">
-                                {cuotasCalculadas.length === 0 ? (
-                                    <p className="text-gray-400 italic text-center py-4">
-                                        Selecciona un socio y periodo para ver las cuotas
-                                    </p>
-                                ) : (
-                                    cuotasCalculadas.map((cuota, idx) => (
-                                        <div key={idx} className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl">
-                                            <span className="font-bold text-gray-700 min-w-[120px]">
-                                                {MESES.find(m => m.numero === cuota.mes)?.nombre} {cuota.anio}
-                                            </span>
-                                            <input
-                                                type="file"
-                                                accept="image/*,application/pdf"
-                                                onChange={(e) => {
-                                                    setComprobantesIndividuales(prev => ({
-                                                        ...prev,
-                                                        [idx]: e.target.files[0]
-                                                    }));
-                                                }}
-                                                className="flex-1 text-sm p-2 border border-gray-300 rounded-lg file:mr-2 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                                            />
-                                            {comprobantesIndividuales[idx] && (
-                                                <span className="text-green-600 font-bold text-sm">✓</span>
-                                            )}
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Observaciones */}
-                    <div className="md:col-span-2">
-                        <label className="block text-xl font-bold text-gray-700 mb-3">
-                            Observaciones (Opcional)
-                        </label>
-                        <textarea
-                            value={observaciones}
-                            onChange={(e) => setObservaciones(e.target.value)}
-                            className="w-full text-lg p-4 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500"
-                            rows="3"
-                            placeholder="Notas adicionales sobre este pago..."
-                        />
-                    </div>
-
 
                     {/* Botón Submit */}
                     <button
                         type="submit"
                         disabled={guardando}
-                        className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-2xl font-black py-6 rounded-2xl hover:shadow-2xl hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-2xl font-black py-4 rounded-2xl hover:shadow-2xl hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-6"
                     >
                         {guardando ? "Guardando..." : "✅ Registrar Pago"}
                     </button>
@@ -913,7 +912,7 @@ export default function PagosMensuales() {
                                         <div className="text-xs text-gray-400 font-normal">{pago.payment_periods?.nombre}</div>
                                     </td>
                                     <td className="p-4 font-black text-lg text-blue-600">
-                                        ${pago.monto.toLocaleString()}
+                                        ${(pago.monto_individual || pago.payment_periods?.monto || 0).toLocaleString()}
                                     </td>
                                     <td className="p-4">
                                         <span className={`px-4 py-2 rounded-full font-bold text-sm ${pago.estado === "pagado"
@@ -939,7 +938,9 @@ export default function PagosMensuales() {
 
                     {pagosFiltrados.length === 0 && (
                         <div className="text-center py-12 text-gray-400">
-                            <p className="text-xl">No hay pagos registrados</p>
+                            <p className="text-xl">
+                                {socioSeleccionado ? "Usuario sin registro de pagos" : "No hay pagos registrados"}
+                            </p>
                         </div>
                     )}
                 </div>

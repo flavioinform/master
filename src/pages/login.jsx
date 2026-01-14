@@ -82,6 +82,14 @@ function Login() {
         return;
       }
 
+      // ✅ Check if account is active
+      if (data.activo === false) {
+        setMensaje("Tu cuenta ha sido desactivada. Contacta al administrador.");
+        setTipo("error");
+        setCargando(false);
+        return;
+      }
+
       // Login Success
       const userData = {
         id: data.id,

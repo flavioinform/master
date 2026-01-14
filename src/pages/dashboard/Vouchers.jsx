@@ -125,6 +125,37 @@ export default function Vouchers() {
   const periodosFiltrados = useMemo(() => {
     let list = periodos;
 
+    // ✅ FILTRO DE INSCRIPCIÓN: Mostrar solo la inscripción que pagó, ocultar las demás
+    // La inscripción es un pago único, solo se paga una vez
+    const todasLasInscripciones = Array.from(misVouchersMap.values())
+      .flat()
+      .filter(v => {
+        const periodo = periodos.find(p => p.id === v.period_id);
+        return periodo?.concepto?.toLowerCase().includes("inscripción") ||
+          periodo?.concepto?.toLowerCase().includes("inscripcion") ||
+          periodo?.nombre?.toLowerCase().includes("inscripción") ||
+          periodo?.nombre?.toLowerCase().includes("inscripcion");
+      });
+
+    // Encontrar la inscripción aprobada (si existe)
+    const inscripcionAprobada = todasLasInscripciones.find(v => v.estado === "aprobado");
+
+    if (inscripcionAprobada) {
+      // Si ya tiene inscripción aprobada, solo mostrar ESA inscripción, ocultar las demás
+      list = list.filter(p => {
+        const esInscripcion = p.concepto?.toLowerCase().includes("inscripción") ||
+          p.concepto?.toLowerCase().includes("inscripcion") ||
+          p.nombre?.toLowerCase().includes("inscripción") ||
+          p.nombre?.toLowerCase().includes("inscripcion");
+
+        // Si no es inscripción, mostrar
+        if (!esInscripcion) return true;
+
+        // Si es inscripción, solo mostrar la que ya pagó
+        return p.id === inscripcionAprobada.period_id;
+      });
+    }
+
     // Filtrar por fecha de ingreso del usuario
     if (userProfile?.fecha_ingreso) {
       const fechaIngreso = new Date(userProfile.fecha_ingreso);
@@ -182,7 +213,7 @@ export default function Vouchers() {
     }
 
     return list;
-  }, [periodos, catFiltro, mesFiltro, anioFiltro, userProfile]);
+  }, [periodos, catFiltro, mesFiltro, anioFiltro, userProfile, misVouchersMap]);
 
   // Vouchers del periodo seleccionado
   const vouchersActuales = useMemo(() => {
@@ -201,8 +232,12 @@ export default function Vouchers() {
     const totalC = periodoSel.total_cuotas || 1;
 
     if (esMensual) {
-      // Identificar el primer mes pendiente en el año visual (o el siguiente)
-      const pagados = vouchersActuales.filter(v => v.anio === anioVisual).map(v => v.mes);
+      // ✅ Extraer el año del nombre del periodo
+      const matchAnio = periodoSel.nombre?.match(/(20\d{2})/);
+      const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : new Date().getFullYear();
+
+      // Identificar el primer mes pendiente en el año del periodo
+      const pagados = vouchersActuales.filter(v => v.anio === anioPeriodo).map(v => v.mes);
 
       // Determinar el mes de inicio basado en la fecha de ingreso del usuario
       let mesInicio = 1; // Por defecto, enero
@@ -212,7 +247,7 @@ export default function Vouchers() {
         const anioIngreso = fechaIngreso.getFullYear();
 
         // Si estamos viendo el año de ingreso, empezar desde el mes de ingreso
-        if (anioVisual === anioIngreso) {
+        if (anioPeriodo === anioIngreso) {
           mesInicio = mesIngreso;
         }
       }
@@ -227,11 +262,11 @@ export default function Vouchers() {
 
       const nuevosMeses = [];
       let currMes = primerMesPendiente;
-      let currAnio = anioVisual;
+      let currAnio = anioPeriodo;
 
       for (let i = 0; i < numCuotasAPagar; i++) {
-        // Solo agregar meses que estén dentro del año visual actual
-        if (currMes <= 12 && currAnio === anioVisual) {
+        // Solo agregar meses que estén dentro del año del periodo
+        if (currMes <= 12 && currAnio === anioPeriodo) {
           nuevosMeses.push({ mes: currMes, anio: currAnio });
           currMes++;
         } else {
@@ -261,7 +296,7 @@ export default function Vouchers() {
       setMesesCalculados(nuevasCuotas);
     }
 
-  }, [multiCuotas, numCuotasAPagar, periodoSel, vouchersActuales, anioVisual, userProfile]);
+  }, [multiCuotas, numCuotasAPagar, periodoSel, vouchersActuales, userProfile]);
 
   // Determinar el "Plan" actual (cuántas cuotas son en total)
   // Si ya existen vouchers, tomamos 'total_cuotas' del primero.
@@ -402,6 +437,10 @@ export default function Vouchers() {
     const slots = [];
     const esCuotaMensual = periodoSel?.concepto?.toLowerCase().includes("mensual") || periodoSel?.nombre?.toLowerCase().includes("mensual");
 
+    // ✅ Extraer el año del nombre del periodo
+    const matchAnio = periodoSel?.nombre?.match(/(20\d{2})/);
+    const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : new Date().getFullYear();
+
     let iteraciones = esCuotaMensual ? 12 : totalCuotasDefinido;
     let mesInicio = 1; // Por defecto, empezar desde Enero
 
@@ -412,11 +451,11 @@ export default function Vouchers() {
       const anioIngreso = fechaIngreso.getFullYear();
 
       // Si estamos viendo el año de ingreso, empezar desde el mes de ingreso
-      if (anioVisual === anioIngreso) {
+      if (anioPeriodo === anioIngreso) {
         mesInicio = mesIngreso;
       }
       // Si estamos viendo un año anterior al ingreso, no mostrar nada
-      else if (anioVisual < anioIngreso) {
+      else if (anioPeriodo < anioIngreso) {
         return (
           <div className="col-span-full text-center py-12">
             <p className="text-slate-400 font-bold text-lg">
@@ -431,7 +470,7 @@ export default function Vouchers() {
 
     for (let i = mesInicio; i <= iteraciones; i++) {
       const voucher = esCuotaMensual
-        ? vouchersActuales.find(v => v.mes === i && v.anio === anioVisual)
+        ? vouchersActuales.find(v => v.mes === i && v.anio === anioPeriodo)
         : vouchersActuales.find(v => v.cuota_numero === i);
 
       const isUploadingThis = cuotaSubiendo === i;
@@ -467,35 +506,47 @@ export default function Vouchers() {
           <div className="mt-8">
             {voucher ? (
               <div className="space-y-4">
-                {voucher.comentario && (
+                {/* Solo mostrar comentario si NO es importación Excel genérica */}
+                {voucher.comentario && voucher.archivo_path !== "excel-import/historico" && (
                   <div className="bg-rose-50 text-rose-600 p-4 rounded-xl border border-rose-100 text-xs font-bold uppercase tracking-wider">
                     {voucher.comentario}
                   </div>
                 )}
-                <div className="grid grid-cols-1 gap-3">
-                  <button
-                    onClick={() => verArchivo(voucher.archivo_path)}
-                    className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95"
-                  >
-                    Ver Comprobante
-                  </button>
-                  {/* ✅ Solo mostrar input de archivo SI NO ES HISTÓRICO */}
-                  {!(periodoSel?.nombre?.toLowerCase().includes("histórico") || periodoSel?.concepto?.toLowerCase().includes("histórico")) && (
-                    <label className="w-full bg-slate-50 text-slate-500 py-3 rounded-xl text-[10px] font-black uppercase text-center cursor-pointer border border-slate-100 hover:bg-slate-100 transition-all active:scale-95">
-                      {isUploadingThis ? "Subiendo..." : "Cambiar Archivo"}
-                      <input type="file" className="hidden" accept="image/*,application/pdf"
-                        onChange={(e) => {
-                          setFile(e.target.files?.[0]);
-                        }}
-                      />
-                    </label>
-                  )}
-                </div>
-                {file && !cuotaSubiendo && (
+
+                {/* Si es importación Excel SIN comprobante real, mostrar mensaje especial */}
+                {voucher.archivo_path === "excel-import/historico" && (
+                  <div className="bg-gray-100 text-gray-600 p-4 rounded-xl border border-gray-200 text-xs font-bold uppercase tracking-wider text-center">
+                    📋 COMPROBANTE NO VISIBLE
+                  </div>
+                )}
+
+                {/* Mostrar botón Ver Comprobante si NO es importación Excel genérica */}
+                {voucher.archivo_path !== "excel-import/historico" && (
+                  <div className="grid grid-cols-1 gap-3">
+                    <button
+                      onClick={() => verArchivo(voucher.archivo_path)}
+                      className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95"
+                    >
+                      Ver Comprobante
+                    </button>
+                    {/* ✅ Solo permitir cambiar archivo si está RECHAZADO */}
+                    {voucher.estado === "rechazado" && !(periodoSel?.nombre?.toLowerCase().includes("histórico") || periodoSel?.concepto?.toLowerCase().includes("histórico")) && (
+                      <label className="w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl text-[10px] font-black uppercase text-center cursor-pointer transition-all active:scale-95">
+                        {isUploadingThis ? "Subiendo..." : "📤 Subir Nuevo Comprobante"}
+                        <input type="file" className="hidden" accept="image/*,application/pdf"
+                          onChange={(e) => {
+                            setFile(e.target.files?.[0]);
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
+                {file && !cuotaSubiendo && voucher.estado === "rechazado" && (
                   <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl animate-in zoom-in-95">
                     <p className="text-[10px] font-bold text-blue-600 truncate mb-3 italic">{file.name}</p>
                     <button
-                      onClick={() => esCuotaMensual ? subir(i, i, anioVisual) : subir(i)}
+                      onClick={() => esCuotaMensual ? subir(i, i, anioPeriodo) : subir(i)}
                       className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-500/20"
                     >
                       Confirmar Subida
@@ -534,7 +585,7 @@ export default function Vouchers() {
                   <div className="mt-4 p-5 bg-blue-50 border border-blue-100 rounded-2xl animate-in fade-in slide-in-from-bottom-2">
                     <p className="text-[10px] font-bold text-blue-600 truncate mb-4 italic">{file.name}</p>
                     <button
-                      onClick={() => esCuotaMensual ? subir(i, i, anioVisual) : subir(i)}
+                      onClick={() => esCuotaMensual ? subir(i, i, anioPeriodo) : subir(i)}
                       className="w-full bg-blue-600 text-white py-4 rounded-xl text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
                     >
                       Enviar Cuota {i}
@@ -650,7 +701,40 @@ export default function Vouchers() {
 
               // Resumen de estado
               const pagadas = misVs.filter(v => v.estado === 'aprobado').length;
-              const totalC = misVs.length > 0 ? misVs[0].total_cuotas : (isSelected ? planCuotas : 1);
+
+              // ✅ Para pagos mensuales, el total siempre es 12 (meses del año)
+              const esMensual = p.concepto?.toLowerCase().includes("mensual") || p.nombre?.toLowerCase().includes("mensual");
+              let totalC;
+              if (esMensual) {
+                // Para pagos mensuales, contar cuántos meses debe pagar según su fecha de ingreso
+                if (userProfile?.fecha_ingreso) {
+                  const fechaIngreso = new Date(userProfile.fecha_ingreso);
+                  const mesIngreso = fechaIngreso.getMonth() + 1;
+                  const anioIngreso = fechaIngreso.getFullYear();
+
+                  // Extraer año del periodo
+                  const matchAnio = p.nombre?.match(/(20\d{2})/);
+                  const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : new Date().getFullYear();
+
+                  if (anioPeriodo === anioIngreso) {
+                    // Si es el año de ingreso, contar desde el mes de ingreso hasta diciembre
+                    totalC = 12 - mesIngreso + 1;
+                  } else if (anioPeriodo > anioIngreso) {
+                    // Si es un año posterior, son 12 meses completos
+                    totalC = 12;
+                  } else {
+                    // Si es un año anterior (no debería pasar), 0
+                    totalC = 0;
+                  }
+                } else {
+                  // Si no hay fecha de ingreso, asumir 12 meses
+                  totalC = 12;
+                }
+              } else {
+                // Para pagos no mensuales, usar el valor guardado o el plan seleccionado
+                totalC = misVs.length > 0 ? misVs[0].total_cuotas : (isSelected ? planCuotas : 1);
+              }
+
               const avance = totalC > 0 ? Math.round((pagadas / totalC) * 100) : 0;
 
               return (

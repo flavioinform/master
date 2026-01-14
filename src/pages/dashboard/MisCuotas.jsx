@@ -57,16 +57,25 @@ export default function MisCuotas() {
                 setUserProfile(profile);
             }
 
-            // Cargar pagos
+            // ✅ Cargar pagos desde la tabla vouchers (unificada)
             const { data, error } = await supabase
-                .from("monthly_payments")
+                .from("vouchers")
                 .select("*")
                 .eq("user_id", user.id)
+                .not("mes", "is", null) // Solo pagos mensuales
                 .order("anio", { ascending: false })
                 .order("mes", { ascending: false });
 
             if (error) throw error;
-            setPagos(data || []);
+
+            // Mapear a formato compatible
+            const mappedData = (data || []).map(v => ({
+                ...v,
+                monto: v.monto_individual, // Mapear monto_individual a monto para compatibilidad
+                comprobante_path: v.archivo_path // Mapear archivo_path a comprobante_path
+            }));
+
+            setPagos(mappedData);
         } catch (error) {
             console.error("Error cargando pagos:", error);
         } finally {
@@ -349,7 +358,7 @@ export default function MisCuotas() {
                                 <div
                                     key={mes.numero}
                                     className={`p-6 rounded-2xl border-4 transition-all ${pago
-                                        ? pago.estado === "pagado"
+                                        ? pago.estado === "pagado" || pago.estado === "aprobado"
                                             ? "bg-green-50 border-green-300"
                                             : "bg-yellow-50 border-yellow-300"
                                         : "bg-gray-50 border-gray-200"
@@ -358,7 +367,7 @@ export default function MisCuotas() {
                                     <div className="text-center">
                                         <div className="text-4xl mb-2">
                                             {pago
-                                                ? pago.estado === "pagado"
+                                                ? pago.estado === "pagado" || pago.estado === "aprobado"
                                                     ? "✅"
                                                     : "⏳"
                                                 : "⚪"}
@@ -369,16 +378,16 @@ export default function MisCuotas() {
                                                 <div className="text-2xl font-black text-blue-600">
                                                     ${pago.monto.toLocaleString()}
                                                 </div>
-                                                <div className={`text-sm font-bold mt-2 ${pago.estado === "pagado" ? "text-green-700" : "text-yellow-700"
+                                                <div className={`text-sm font-bold mt-2 ${pago.estado === "pagado" || pago.estado === "aprobado" ? "text-green-700" : "text-yellow-700"
                                                     }`}>
-                                                    {pago.estado === "pagado" ? "Pagado" : "Pendiente"}
+                                                    {pago.estado === "pagado" || pago.estado === "aprobado" ? "✅ Aprobado" : "⏳ Pendiente"}
                                                 </div>
                                                 {pago.comprobante_path && (
                                                     <button
                                                         onClick={() => verComprobante(pago.comprobante_path)}
-                                                        className="mt-2 text-blue-600 hover:text-blue-800 text-sm font-bold underline"
+                                                        className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all"
                                                     >
-                                                        Ver comprobante
+                                                        📄 Ver Comprobante
                                                     </button>
                                                 )}
                                             </>

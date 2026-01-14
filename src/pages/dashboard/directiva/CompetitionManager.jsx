@@ -42,7 +42,10 @@ export default function CompetitionManager() {
     const [showStageModal, setShowStageModal] = useState(false);
     const [showEventModal, setShowEventModal] = useState(false);
     const [showManualModal, setShowManualModal] = useState(false);
-    const [selectedStage, setSelectedStage] = useState(null);
+
+    // ✅ Refactor: Use ID state and derive stage object to ensure fresh data
+    const [selectedStageId, setSelectedStageId] = useState(null);
+    const selectedStage = stages.find(s => s.id === selectedStageId);
 
     const loadData = async () => {
         setLoading(true);
@@ -176,17 +179,95 @@ export default function CompetitionManager() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeTab, id]);
 
+    // ✅ FUNCIÓN PARA DUPLICAR COMPETENCIA
+    const duplicateCompetition = async () => {
+        const newName = prompt("Ingresa el nombre para la nueva competencia:", `${competition.name} (Copia)`);
+        if (!newName || newName.trim() === "") {
+            alert("Debes ingresar un nombre válido");
+            return;
+        }
+
+        try {
+            // 1. Duplicar la competencia principal
+            const { data: newComp, error: e1 } = await supabase
+                .from("competitions")
+                .insert({
+                    name: newName.trim(),
+                    organizer: competition.organizer,
+                    start_date: competition.start_date,
+                    end_date: competition.end_date,
+                    location: competition.location,
+                    description: competition.description,
+                    status: "draft", // Nueva competencia empieza como borrador
+                    registration_deadline: competition.registration_deadline,
+                    max_participants: competition.max_participants
+                })
+                .select()
+                .single();
+
+            if (e1) throw e1;
+
+            // 2. Duplicar todas las etapas
+            for (const stage of stages) {
+                const { data: newStage, error: e2 } = await supabase
+                    .from("competition_stages")
+                    .insert({
+                        competition_id: newComp.id,
+                        name: stage.name,
+                        date: stage.date,
+                        pool_type: stage.pool_type,
+                        location: stage.location,
+                        start_time: stage.start_time
+                    })
+                    .select()
+                    .single();
+
+                if (e2) throw e2;
+
+                // 3. Duplicar todas las pruebas de esta etapa
+                if (stage.competition_events && stage.competition_events.length > 0) {
+                    const eventsToInsert = stage.competition_events.map(event => ({
+                        stage_id: newStage.id,
+                        catalog_id: event.event_catalog.id,
+                        event_number: event.event_number
+                    }));
+
+                    const { error: e3 } = await supabase
+                        .from("competition_events")
+                        .insert(eventsToInsert);
+
+                    if (e3) throw e3;
+                }
+            }
+
+            alert(`✅ Competencia "${newName}" duplicada exitosamente!`);
+            // Redirigir a la nueva competencia
+            window.location.href = `/dashboard/directiva/CompetitionManager/${newComp.id}`;
+        } catch (err) {
+            console.error("Error duplicando competencia:", err);
+            alert(`Error al duplicar: ${err.message}`);
+        }
+    };
+
     if (loading) return <div className="p-6">Cargando detalles...</div>;
     if (!competition) return <div className="p-6">Competencia no encontrada.</div>;
 
     return (
         <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-7xl mx-auto space-y-6">
+            <div className="max-w-[1600px] mx-auto space-y-6">
 
-                <div>
-                    <Link to="/dashboard/directiva/CrearConvocatoria" className="text-sm text-blue-600 hover:underline">← Volver a Lista</Link>
-                    <h1 className="text-3xl font-bold text-gray-900 mt-2">{competition.name}</h1>
-                    <p className="text-gray-500">{competition.organizer} • {new Date(competition.start_date).toLocaleDateString()} al {new Date(competition.end_date).toLocaleDateString()}</p>
+                <div className="flex justify-between items-start">
+                    <div>
+                        <Link to="/dashboard/directiva/CrearConvocatoria" className="text-sm text-blue-600 hover:underline">← Volver a Lista</Link>
+                        <h1 className="text-3xl font-bold text-gray-900 mt-2">{competition.name}</h1>
+                        <p className="text-gray-500">{competition.organizer} • {new Date(competition.start_date).toLocaleDateString()} al {new Date(competition.end_date).toLocaleDateString()}</p>
+                    </div>
+                    <button
+                        onClick={duplicateCompetition}
+                        className="bg-purple-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-purple-700 shadow flex items-center gap-2"
+                    >
+                        <span>📋</span> Duplicar Competencia
+                    </button>
                 </div>
 
                 <div className="flex gap-2 border-b">
@@ -231,7 +312,7 @@ export default function CompetitionManager() {
                                     <StageCard
                                         key={stage.id}
                                         stage={stage}
-                                        onAddEvent={() => { setSelectedStage(stage); setShowEventModal(true); }}
+                                        onAddEvent={() => { setSelectedStageId(stage.id); setShowEventModal(true); }}
                                         onReload={loadData}
                                     />
                                 ))
@@ -472,8 +553,15 @@ function EventModal({ stage, onClose, onReload }) {
     };
 
     const createAndAdd = async () => {
+        // ✅ Convertir 4050 (4x50) a 200 antes de guardar
+        const distanceToSave = newEvt.distance === 4050 ? 200 : newEvt.distance;
+        const displayDistance = newEvt.distance === 4050 ? "4x50" : null; // Texto especial para mostrar
+
         const { data, error } = await supabase.from("event_catalog").insert({
-            ...newEvt
+            ...newEvt,
+            distance: distanceToSave,
+            display_distance: displayDistance, // Campo para mostrar "4x50" en lugar de "200m"
+            is_relay: newEvt.distance === 4050 // Marcar como relevo si es 4x50
         }).select().single();
         if (error) { alert(error.message); return; }
         await addEvent(data.id);
@@ -505,7 +593,14 @@ function EventModal({ stage, onClose, onReload }) {
                                 <div>
                                     <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Distancia</label>
                                     <select className="w-full border rounded-lg p-2.5 font-bold" value={newEvt.distance} onChange={e => setNewEvt({ ...newEvt, distance: Number(e.target.value) })}>
-                                        {[25, 50, 100, 200, 400, 800, 1500].map(d => <option key={d} value={d}>{d}m</option>)}
+                                        <option value={25}>25m</option>
+                                        <option value={50}>50m</option>
+                                        <option value={100}>100m</option>
+                                        <option value={200}>200m</option>
+                                        <option value={4050}>4x50 (relevo)</option>
+                                        <option value={400}>400m</option>
+                                        <option value={800}>800m</option>
+                                        <option value={1500}>1500m</option>
                                     </select>
                                 </div>
                                 <div>

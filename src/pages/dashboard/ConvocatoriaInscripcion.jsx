@@ -119,6 +119,7 @@ export default function ConvocatoriaInscripcion() {
         // Pre-fill selections
         const evtMap = {};
         const stgSet = new Set();
+        let hasConfirmed = false;
 
         (enrollments || []).forEach(enr => {
           const eventId = enr.event_id;
@@ -128,14 +129,22 @@ export default function ConvocatoriaInscripcion() {
             selected: true,
             time: enr.entry_time || "",
             resultTime: enr.result_time || "",
-            enrollmentId: enr.id
+            enrollmentId: enr.id,
+            status: enr.status
           };
 
+          if (enr.status === "confirmed") hasConfirmed = true;
           if (stageId) stgSet.add(stageId);
         });
 
         setSelectedEvents(evtMap);
         setSelectedStages(stgSet);
+
+        // Store if enrollment is confirmed
+        if (hasConfirmed) {
+          setMsg("✅ Tu inscripción ha sido enviada. Ya no puedes modificarla.");
+          setTipo("success");
+        }
 
       } catch (err) {
         setMsg(err?.message || "Error cargando competencia.");
@@ -528,8 +537,8 @@ export default function ConvocatoriaInscripcion() {
                           type="checkbox"
                           checked={isStageSelected}
                           onChange={() => toggleStage(stage.id)}
-                          className="h-8 w-8 rounded-lg border-slate-200 text-blue-600 focus:ring-4 focus:ring-blue-500/10 cursor-pointer appearance-none border checked:bg-blue-600 checked:border-blue-600 transition-all"
-                          disabled={profileIncomplete}
+                          className="h-8 w-8 rounded-lg border-slate-200 text-blue-600 focus:ring-4 focus:ring-blue-500/10 cursor-pointer appearance-none border checked:bg-blue-600 checked:border-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={profileIncomplete || Object.values(selectedEvents).some(e => e.status === "confirmed")}
                         />
                         {isStageSelected && <span className="absolute inset-0 flex items-center justify-center text-white pointer-events-none text-xs font-black">✓</span>}
                       </div>
@@ -576,7 +585,8 @@ export default function ConvocatoriaInscripcion() {
                                       type="checkbox"
                                       checked={eventData.selected}
                                       onChange={() => toggleEvent(evt.id)}
-                                      className="h-6 w-6 border border-slate-200 rounded-md cursor-pointer appearance-none checked:bg-blue-600 checked:border-blue-600 transition-all"
+                                      className="h-6 w-6 border border-slate-200 rounded-md cursor-pointer appearance-none checked:bg-blue-600 checked:border-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                      disabled={eventData.status === "confirmed"}
                                     />
                                     {eventData.selected && <span className="absolute inset-0 flex items-center justify-center text-white pointer-events-none text-[10px] font-black">✓</span>}
                                   </div>
@@ -598,9 +608,10 @@ export default function ConvocatoriaInscripcion() {
                                       <div className="flex gap-2 items-center justify-center">
                                         <div className="flex flex-col items-center">
                                           <select
-                                            className="border border-slate-100 rounded-lg p-2 text-lg font-black bg-slate-50 w-16 outline-none focus:border-blue-600 transition-all appearance-none text-center"
+                                            className="border border-slate-100 rounded-lg p-2 text-lg font-black bg-slate-50 w-16 outline-none focus:border-blue-600 transition-all appearance-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                             value={parseTime(eventData.time).minutes}
                                             onChange={(e) => updateTime(evt.id, parseInt(e.target.value), parseTime(eventData.time).seconds, parseTime(eventData.time).ms)}
+                                            disabled={eventData.status === "confirmed"}
                                           >
                                             {Array.from({ length: 60 }, (_, i) => (<option key={i} value={i}>{i}</option>))}
                                           </select>
@@ -609,9 +620,10 @@ export default function ConvocatoriaInscripcion() {
                                         <span className="text-lg font-black text-slate-200">:</span>
                                         <div className="flex flex-col items-center">
                                           <select
-                                            className="border border-slate-100 rounded-lg p-2 text-lg font-black bg-slate-50 w-16 outline-none focus:border-blue-600 transition-all appearance-none text-center"
+                                            className="border border-slate-100 rounded-lg p-2 text-lg font-black bg-slate-50 w-16 outline-none focus:border-blue-600 transition-all appearance-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                             value={parseTime(eventData.time).seconds}
                                             onChange={(e) => updateTime(evt.id, parseTime(eventData.time).minutes, parseInt(e.target.value), parseTime(eventData.time).ms)}
+                                            disabled={eventData.status === "confirmed"}
                                           >
                                             {Array.from({ length: 60 }, (_, i) => (<option key={i} value={i}>{i}</option>))}
                                           </select>
@@ -620,51 +632,14 @@ export default function ConvocatoriaInscripcion() {
                                         <span className="text-lg font-black text-slate-200">.</span>
                                         <div className="flex flex-col items-center">
                                           <select
-                                            className="border border-slate-100 rounded-lg p-2 text-lg font-black bg-slate-50 w-16 outline-none focus:border-blue-600 transition-all appearance-none text-center"
+                                            className="border border-slate-100 rounded-lg p-2 text-lg font-black bg-slate-50 w-16 outline-none focus:border-blue-600 transition-all appearance-none text-center disabled:opacity-50 disabled:cursor-not-allowed"
                                             value={parseTime(eventData.time).ms}
                                             onChange={(e) => updateTime(evt.id, parseTime(eventData.time).minutes, parseTime(eventData.time).seconds, parseInt(e.target.value))}
+                                            disabled={eventData.status === "confirmed"}
                                           >
                                             {Array.from({ length: 100 }, (_, i) => (<option key={i} value={i}>{String(i).padStart(2, '0')}</option>))}
                                           </select>
                                           <span className="text-[8px] font-black mt-1 uppercase text-slate-300 tracking-tighter">mil</span>
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    <div className="hidden md:block w-px h-10 bg-slate-100"></div>
-
-                                    {/* Result Time Selection (Si existe) */}
-                                    <div className="space-y-3 w-full md:w-auto">
-                                      <label className="block text-[10px] font-black text-blue-400 uppercase tracking-[0.2em] text-center">Tiempo Final (Post-Comp)</label>
-                                      <div className="flex gap-2 items-center justify-center">
-                                        <div className="flex flex-col items-center">
-                                          <select
-                                            className="border border-blue-50 rounded-lg p-2 text-sm font-black bg-blue-50/50 text-blue-600 w-14 outline-none appearance-none text-center"
-                                            value={parseTime(eventData.resultTime).minutes}
-                                            onChange={(e) => updateResult(evt.id, parseInt(e.target.value), parseTime(eventData.resultTime).seconds, parseTime(eventData.resultTime).ms)}
-                                          >
-                                            {Array.from({ length: 60 }, (_, i) => (<option key={i} value={i}>{i}</option>))}
-                                          </select>
-                                        </div>
-                                        <span className="text-sm font-black text-blue-200">:</span>
-                                        <div className="flex flex-col items-center">
-                                          <select
-                                            className="border border-blue-50 rounded-lg p-2 text-sm font-black bg-blue-50/50 text-blue-600 w-14 outline-none appearance-none text-center"
-                                            value={parseTime(eventData.resultTime).seconds}
-                                            onChange={(e) => updateResult(evt.id, parseTime(eventData.resultTime).minutes, parseInt(e.target.value), parseTime(eventData.resultTime).ms)}
-                                          >
-                                            {Array.from({ length: 60 }, (_, i) => (<option key={i} value={i}>{i}</option>))}
-                                          </select>
-                                        </div>
-                                        <span className="text-sm font-black text-blue-200">.</span>
-                                        <div className="flex flex-col items-center">
-                                          <select
-                                            className="border border-blue-50 rounded-lg p-2 text-sm font-black bg-blue-50/50 text-blue-600 w-14 outline-none appearance-none text-center"
-                                            value={parseTime(eventData.resultTime).ms}
-                                            onChange={(e) => updateResult(evt.id, parseTime(eventData.resultTime).minutes, parseTime(eventData.resultTime).seconds, parseInt(e.target.value))}
-                                          >
-                                            {Array.from({ length: 100 }, (_, i) => (<option key={i} value={i}>{String(i).padStart(2, '0')}</option>))}
-                                          </select>
                                         </div>
                                       </div>
                                     </div>
@@ -689,14 +664,14 @@ export default function ConvocatoriaInscripcion() {
         <div className="flex flex-col md:flex-row gap-6 p-10 bg-slate-900 border border-slate-800 rounded-[3rem] shadow-xl shadow-slate-200/50">
           <button
             onClick={() => handleSave(false)}
-            disabled={saving}
+            disabled={saving || Object.values(selectedEvents).some(e => e.status === "confirmed")}
             className="flex-1 bg-white/10 hover:bg-white/20 text-white py-8 rounded-2xl font-black text-xl border border-white/20 transition-all active:scale-[0.98] disabled:opacity-50 uppercase tracking-widest"
           >
             {saving ? "Guardando..." : "1. Guardar Borrador"}
           </button>
           <button
             onClick={() => handleSave(true)}
-            disabled={saving}
+            disabled={saving || Object.values(selectedEvents).some(e => e.status === "confirmed")}
             className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-8 rounded-2xl font-black text-xl shadow-xl shadow-blue-500/25 transition-all active:scale-[0.98] disabled:opacity-50 uppercase tracking-widest border border-blue-500"
           >
             {saving ? "Enviando..." : "2. Enviar Inscripción"}

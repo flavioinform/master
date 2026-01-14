@@ -121,11 +121,99 @@ export default function CrearConvocatoria() {
     else loadCompetitions();
   };
 
+  // ✅ FUNCIÓN PARA DUPLICAR COMPETENCIA
+  const handleDuplicate = async (comp) => {
+    const newName = prompt("Ingresa el nombre para la nueva competencia:", `${comp.name} (Copia)`);
+    if (!newName || newName.trim() === "") {
+      alert("Debes ingresar un nombre válido");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // 1. Obtener todas las etapas y pruebas de la competencia original
+      const { data: stages, error: e1 } = await supabase
+        .from("competition_stages")
+        .select(`
+          *,
+          competition_events (
+            id, event_number, catalog_id
+          )
+        `)
+        .eq("competition_id", comp.id)
+        .order("date", { ascending: true });
+
+      if (e1) throw e1;
+
+      // 2. Duplicar la competencia principal
+      const { data: newComp, error: e2 } = await supabase
+        .from("competitions")
+        .insert({
+          name: newName.trim(),
+          organizer: comp.organizer,
+          start_date: comp.start_date,
+          end_date: comp.end_date,
+          location: comp.location,
+          description: comp.description,
+          status: "draft", // Nueva competencia empieza como borrador
+          registration_deadline: comp.registration_deadline,
+          max_participants: comp.max_participants,
+          image_url: comp.image_url
+        })
+        .select()
+        .single();
+
+      if (e2) throw e2;
+
+      // 3. Duplicar todas las etapas y sus pruebas
+      for (const stage of (stages || [])) {
+        const { data: newStage, error: e3 } = await supabase
+          .from("competition_stages")
+          .insert({
+            competition_id: newComp.id,
+            name: stage.name,
+            date: stage.date,
+            pool_type: stage.pool_type,
+            location: stage.location,
+            start_time: stage.start_time
+          })
+          .select()
+          .single();
+
+        if (e3) throw e3;
+
+        // 4. Duplicar todas las pruebas de esta etapa
+        if (stage.competition_events && stage.competition_events.length > 0) {
+          const eventsToInsert = stage.competition_events.map(event => ({
+            stage_id: newStage.id,
+            catalog_id: event.catalog_id,
+            event_number: event.event_number
+          }));
+
+          const { error: e4 } = await supabase
+            .from("competition_events")
+            .insert(eventsToInsert);
+
+          if (e4) throw e4;
+        }
+      }
+
+      alert(`✅ Competencia "${newName}" duplicada exitosamente!`);
+      loadCompetitions(); // Refrescar la lista
+    } catch (err) {
+      console.error("Error duplicando competencia:", err);
+      alert(`Error al duplicar: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (loading) return <div className="p-6">Cargando competencias...</div>;
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+      <div className="max-w-[1600px] mx-auto space-y-6">
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
@@ -194,6 +282,7 @@ export default function CrearConvocatoria() {
                         Administrar
                       </Link>
                       <button onClick={() => openModal(c)} className="text-gray-500 hover:text-gray-800 text-sm">Editar</button>
+                      <button onClick={() => handleDuplicate(c)} className="text-purple-600 hover:text-purple-800 text-sm font-bold">Duplicar</button>
                       <button onClick={() => handleDelete(c.id)} className="text-red-500 hover:text-red-700 text-sm">Eliminar</button>
                     </td>
                   </tr>

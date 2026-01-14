@@ -262,12 +262,32 @@ export default function VouchersAdmin() {
         return;
       }
 
-      // Buscar periodo por nombre exacto
+      // Buscar periodo por nombre (flexible: case-insensitive y trim)
+      // Primero intentar búsqueda exacta
       let { data: periodo, error: periodoError } = await supabase
         .from("payment_periods")
-        .select("id")
-        .eq("nombre", nombrePeriodo)
-        .single();
+        .select("id, nombre")
+        .eq("nombre", nombrePeriodo.trim())
+        .maybeSingle();
+
+      // Si no se encuentra, intentar búsqueda case-insensitive
+      if (!periodo) {
+        const { data: allPeriods } = await supabase
+          .from("payment_periods")
+          .select("id, nombre");
+
+        // Buscar coincidencia ignorando mayúsculas/minúsculas y espacios extra
+        const nombreNormalizado = nombrePeriodo.trim().toLowerCase().replace(/\s+/g, ' ');
+        periodo = allPeriods?.find(p =>
+          p.nombre.trim().toLowerCase().replace(/\s+/g, ' ') === nombreNormalizado
+        );
+
+        if (periodo) {
+          console.log(`✅ Periodo encontrado (búsqueda flexible): "${periodo.nombre}"`);
+        }
+      } else {
+        console.log(`✅ Periodo encontrado (búsqueda exacta): "${periodo.nombre}"`);
+      }
 
       // Si no existe, ofrecer crearlo
       if (periodoError || !periodo) {

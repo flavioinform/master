@@ -536,14 +536,15 @@ export default function PerfilesAdmin() {
                   <span className="font-semibold">{u.rol}</span>
                 </td>
                 <td className="p-3">
-                  <span
-                    className={`text-xs font-semibold px-2 py-1 rounded-full ${u.activo
+                  <button
+                    onClick={() => toggleActivo(u.id, u.activo)}
+                    className={`text-xs font-semibold px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-all ${u.activo
                       ? "bg-green-100 text-green-700"
                       : "bg-red-100 text-red-700"
                       }`}
                   >
                     {u.activo ? "Activo" : "Bloqueado"}
-                  </span>
+                  </button>
                 </td>
 
                 <td className="p-3 text-right space-x-2">
