@@ -103,16 +103,24 @@ export default function ConvocatoriaInscripcion() {
 
         setStages(sortedStages);
 
-        // 4) Load existing enrollments for this user
+        // ✅ Auto-expand all stages when page loads
+        const allStageIds = new Set(sortedStages.map(s => s.id));
+        setExpandedStages(allStageIds);
+
+        // 4) Load existing enrollments for this user IN THIS COMPETITION
         const { data: enrollments, error: e4 } = await supabase
           .from("competition_enrollments")
           .select(`
             id, event_id, entry_time, result_time, status,
             competition_events!inner(
-              id, stage_id
+              id, stage_id,
+              competition_stages!inner(
+                competition_id
+              )
             )
           `)
-          .eq("user_id", user.id);
+          .eq("user_id", user.id)
+          .eq("competition_events.competition_stages.competition_id", id);
 
         if (e4) throw e4;
 
@@ -140,7 +148,7 @@ export default function ConvocatoriaInscripcion() {
         setSelectedEvents(evtMap);
         setSelectedStages(stgSet);
 
-        // Store if enrollment is confirmed
+        // Store if enrollment is confirmed FOR THIS COMPETITION
         if (hasConfirmed) {
           setMsg("✅ Tu inscripción ha sido enviada. Ya no puedes modificarla.");
           setTipo("success");
@@ -662,20 +670,30 @@ export default function ConvocatoriaInscripcion() {
       {/* Action Buttons - Clean Modern */}
       {!profileIncomplete && (
         <div className="flex flex-col md:flex-row gap-6 p-10 bg-slate-900 border border-slate-800 rounded-[3rem] shadow-xl shadow-slate-200/50">
-          <button
-            onClick={() => handleSave(false)}
-            disabled={saving || Object.values(selectedEvents).some(e => e.status === "confirmed")}
-            className="flex-1 bg-white/10 hover:bg-white/20 text-white py-8 rounded-2xl font-black text-xl border border-white/20 transition-all active:scale-[0.98] disabled:opacity-50 uppercase tracking-widest"
-          >
-            {saving ? "Guardando..." : "1. Guardar Borrador"}
-          </button>
-          <button
-            onClick={() => handleSave(true)}
-            disabled={saving || Object.values(selectedEvents).some(e => e.status === "confirmed")}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-8 rounded-2xl font-black text-xl shadow-xl shadow-blue-500/25 transition-all active:scale-[0.98] disabled:opacity-50 uppercase tracking-widest border border-blue-500"
-          >
-            {saving ? "Enviando..." : "2. Enviar Inscripción"}
-          </button>
+          {Object.values(selectedEvents).some(e => e.status === "confirmed") ? (
+            // Show read-only message if enrollment is confirmed
+            <div className="flex-1 bg-emerald-50 border-2 border-emerald-200 text-emerald-700 py-8 px-6 rounded-2xl font-black text-xl text-center uppercase tracking-widest">
+              ✅ Inscripción Confirmada - Solo Lectura
+            </div>
+          ) : (
+            // Show action buttons if enrollment is not confirmed
+            <>
+              <button
+                onClick={() => handleSave(false)}
+                disabled={saving}
+                className="flex-1 bg-white/10 hover:bg-white/20 text-white py-8 rounded-2xl font-black text-xl border border-white/20 transition-all active:scale-[0.98] disabled:opacity-50 uppercase tracking-widest"
+              >
+                {saving ? "Guardando..." : "1. Guardar Borrador"}
+              </button>
+              <button
+                onClick={() => handleSave(true)}
+                disabled={saving}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-8 rounded-2xl font-black text-xl shadow-xl shadow-blue-500/25 transition-all active:scale-[0.98] disabled:opacity-50 uppercase tracking-widest border border-blue-500"
+              >
+                {saving ? "Enviando..." : "2. Enviar Inscripción"}
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -1888,7 +1888,9 @@ function VoucherCard({ v, onView, onReview, onDownload, onDelete, onEdit }) {
   return (
     <div className={`border p-6 rounded-[2rem] shadow-sm space-y-6 animate-in fade-in duration-500 hover:shadow-md transition-all group ${v.estado === 'aprobado'
       ? 'bg-emerald-50 border-emerald-200'
-      : 'bg-white border-slate-200'
+      : v.estado === 'rechazado'
+        ? 'bg-red-50 border-red-200'
+        : 'bg-white border-slate-200'
       }`}>
       <div className="flex flex-col xl:flex-row justify-between items-start gap-6">
         {/* Info Socio */}

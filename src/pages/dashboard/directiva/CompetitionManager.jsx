@@ -354,11 +354,20 @@ export default function CompetitionManager() {
                                             <th className="p-3 text-left">T. Entrada</th>
                                             <th className="p-3 text-left">T. Resultado</th>
                                             <th className="p-3 text-center">Estado</th>
+                                            <th className="p-3 text-center">Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y">
                                         {enrollments.map(enr => (
-                                            <tr key={enr.id} className="hover:bg-gray-50">
+                                            <tr
+                                                key={enr.id}
+                                                className={`transition-colors ${enr.status === 'rejected'
+                                                        ? 'bg-red-50 hover:bg-red-100'
+                                                        : enr.status === 'confirmed'
+                                                            ? 'bg-green-50 hover:bg-green-100'
+                                                            : 'hover:bg-gray-50'
+                                                    }`}
+                                            >
                                                 <td className="p-3 font-medium">{enr.profiles.nombre_completo}</td>
                                                 <td className="p-3 text-gray-600">{enr.profiles.rut}</td>
                                                 <td className="p-3 text-center font-bold text-blue-600">{enr.profiles.talla || "-"}</td>
@@ -375,10 +384,46 @@ export default function CompetitionManager() {
                                                     )}
                                                 </td>
                                                 <td className="p-3 text-center">
-                                                    <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${enr.status === 'confirmed' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                                                    <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${enr.status === 'confirmed'
+                                                            ? 'bg-green-100 text-green-700 border border-green-200'
+                                                            : enr.status === 'rejected'
+                                                                ? 'bg-red-100 text-red-700 border border-red-200'
+                                                                : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
                                                         }`}>
-                                                        {enr.status === 'confirmed' ? 'Confirmado' : 'Pendiente'}
+                                                        {enr.status === 'confirmed' ? 'Aprobado' : enr.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
                                                     </span>
+                                                </td>
+                                                <td className="p-3">
+                                                    <div className="flex gap-2 justify-center">
+                                                        {enr.status !== 'confirmed' && (
+                                                            <button
+                                                                onClick={async () => {
+                                                                    await supabase
+                                                                        .from('competition_enrollments')
+                                                                        .update({ status: 'confirmed' })
+                                                                        .eq('id', enr.id);
+                                                                    loadEnrollments();
+                                                                }}
+                                                                className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-bold"
+                                                            >
+                                                                APROBAR
+                                                            </button>
+                                                        )}
+                                                        {enr.status !== 'rejected' && (
+                                                            <button
+                                                                onClick={async () => {
+                                                                    await supabase
+                                                                        .from('competition_enrollments')
+                                                                        .update({ status: 'rejected' })
+                                                                        .eq('id', enr.id);
+                                                                    loadEnrollments();
+                                                                }}
+                                                                className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-bold"
+                                                            >
+                                                                RECHAZAR
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))}
