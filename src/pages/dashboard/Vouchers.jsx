@@ -922,28 +922,54 @@ export default function Vouchers() {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
                         1. Cantidad de cuotas
                       </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="1"
-                          max={(() => {
-                            // Calcular el máximo de meses disponibles en el año actual
-                            if (!periodoSel || !userProfile?.fecha_ingreso) return 12;
-                            const esMensual = periodoSel.concepto?.toLowerCase().includes("mensual") || periodoSel.nombre?.toLowerCase().includes("mensual");
-                            if (!esMensual) return 12;
+                      <div className="space-y-3">
+                        {/* Botones de incremento/decremento grandes */}
+                        <div className="flex items-center gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setNumCuotasAPagar(Math.max(1, numCuotasAPagar - 1))}
+                            disabled={numCuotasAPagar <= 1}
+                            className="bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-white font-black text-3xl w-16 h-16 rounded-2xl transition-all hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg"
+                          >
+                            −
+                          </button>
+                          <div className="flex-1 bg-gradient-to-br from-blue-50 to-cyan-50 border-4 border-blue-300 rounded-2xl p-4 text-center shadow-inner">
+                            <span className="text-5xl font-black text-blue-600">{numCuotasAPagar}</span>
+                            <div className="text-xs text-gray-500 mt-1 font-bold uppercase">
+                              {numCuotasAPagar === 1 ? "mes" : "meses"}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const maxMeses = (() => {
+                                if (!periodoSel || !userProfile?.fecha_ingreso) return 12;
+                                const esMensual = periodoSel.concepto?.toLowerCase().includes("mensual") || periodoSel.nombre?.toLowerCase().includes("mensual");
+                                if (!esMensual) return 12;
 
-                            const fechaIngreso = new Date(userProfile.fecha_ingreso);
-                            const mesIngreso = fechaIngreso.getMonth() + 1;
-                            const anioIngreso = fechaIngreso.getFullYear();
+                                const fechaIngreso = new Date(userProfile.fecha_ingreso);
+                                const mesIngreso = fechaIngreso.getMonth() + 1;
+                                const anioIngreso = fechaIngreso.getFullYear();
 
-                            // Si estamos viendo el año de ingreso, calcular meses desde el ingreso hasta diciembre
-                            if (anioVisual === anioIngreso) {
-                              return 12 - mesIngreso + 1; // Ej: si ingresó en octubre (10), son 3 meses (oct, nov, dic)
-                            }
-                            return 12;
-                          })()}
-                          value={numCuotasAPagar}
-                          onChange={(e) => {
+                                const matchAnio = periodoSel?.nombre?.match(/(20\d{2})/);
+                                const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : new Date().getFullYear();
+
+                                if (anioPeriodo === anioIngreso) {
+                                  return 12 - mesIngreso + 1;
+                                }
+                                return 12;
+                              })();
+                              setNumCuotasAPagar(Math.min(maxMeses, numCuotasAPagar + 1));
+                            }}
+                            className="bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white font-black text-3xl w-16 h-16 rounded-2xl transition-all hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg"
+                          >
+                            +
+                          </button>
+                        </div>
+
+                        {/* Botones de acceso rápido */}
+                        <div className="grid grid-cols-4 gap-2">
+                          {[1, 3, 6, 12].map(num => {
                             const maxMeses = (() => {
                               if (!periodoSel || !userProfile?.fecha_ingreso) return 12;
                               const esMensual = periodoSel.concepto?.toLowerCase().includes("mensual") || periodoSel.nombre?.toLowerCase().includes("mensual");
@@ -953,16 +979,33 @@ export default function Vouchers() {
                               const mesIngreso = fechaIngreso.getMonth() + 1;
                               const anioIngreso = fechaIngreso.getFullYear();
 
-                              if (anioVisual === anioIngreso) {
+                              const matchAnio = periodoSel?.nombre?.match(/(20\d{2})/);
+                              const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : new Date().getFullYear();
+
+                              if (anioPeriodo === anioIngreso) {
                                 return 12 - mesIngreso + 1;
                               }
                               return 12;
                             })();
-                            setNumCuotasAPagar(Math.max(1, Math.min(maxMeses, parseInt(e.target.value) || 1)));
-                          }}
-                          className="w-full text-3xl p-6 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 font-black shadow-sm outline-none bg-white transition-all"
-                        />
-                        <div className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300 font-bold text-lg">MESES</div>
+
+                            return (
+                              <button
+                                key={num}
+                                type="button"
+                                onClick={() => setNumCuotasAPagar(Math.min(maxMeses, num))}
+                                disabled={num > maxMeses}
+                                className={`py-2 px-3 rounded-xl font-bold text-sm transition-all ${numCuotasAPagar === num
+                                    ? "bg-blue-600 text-white shadow-md scale-105"
+                                    : num > maxMeses
+                                      ? "bg-gray-100 text-gray-300 cursor-not-allowed"
+                                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-105"
+                                  }`}
+                              >
+                                {num}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
 

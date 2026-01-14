@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 import { AppContext } from "@/context/AppContext";
 import { Calendar, DollarSign, User, Check, Clock, FileText } from "lucide-react";
@@ -45,6 +45,10 @@ export default function PagosMensuales() {
     const [msg, setMsg] = useState("");
     const [tipo, setTipo] = useState("");
     const [guardando, setGuardando] = useState(false);
+
+    // ✅ Refs para limpiar inputs de archivo
+    const comprobanteUnicoRef = useRef(null);
+    const comprobantesIndividualesRefs = useRef({});
 
     // Filtros para historial
     const [filtroAnio, setFiltroAnio] = useState(new Date().getFullYear());
@@ -430,21 +434,28 @@ export default function PagosMensuales() {
 
             // Limpiar formulario
             setSocioSeleccionado("");
+            setBusquedaSocio(""); // ✅ Limpiar búsqueda de socio
             setMonto("");
             setPeriodoId("");
             setComprobante(null);
             setComprobantesIndividuales({}); // ✅ Limpiar comprobantes individuales
             setModoComprobante("unico"); // ✅ Resetear a modo único
-            // Observaciones reset removed
             setCantidadCuotas(1);
 
-            // Recargar pagos
-            await cargarPagos();
+            // ✅ Limpiar inputs de archivo en el DOM
+            if (comprobanteUnicoRef.current) {
+                comprobanteUnicoRef.current.value = "";
+            }
+            // Limpiar todos los refs de comprobantes individuales
+            Object.keys(comprobantesIndividualesRefs.current).forEach(key => {
+                if (comprobantesIndividualesRefs.current[key]) {
+                    comprobantesIndividualesRefs.current[key].value = "";
+                }
+            });
+            comprobantesIndividualesRefs.current = {};
 
-            // ✅ Recargar página tras éxito (Refresh)
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
+            // ✅ Recargar pagos inmediatamente
+            await cargarPagos();
 
         } catch (error) {
             console.error("Error registrando pago:", error);
@@ -657,18 +668,53 @@ export default function PagosMensuales() {
                                 <DollarSign className="inline h-6 w-6 mr-2" />
                                 Cantidad de Cuotas
                             </label>
-                            <input
-                                type="number"
-                                value={cantidadCuotas}
-                                onChange={(e) => setCantidadCuotas(Math.max(1, parseInt(e.target.value) || 1))}
-                                className={`w-full text-xl p-4 border-3 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 font-bold ${periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase())))
-                                    ? "bg-gray-100 text-gray-500 cursor-not-allowed"
-                                    : ""
-                                    }`}
-                                min="1"
-                                required
-                                disabled={periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase())))}
-                            />
+                            <div className={`space-y-3 ${periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase())))
+                                ? "opacity-50 pointer-events-none"
+                                : ""
+                                }`}>
+                                {/* Botones de incremento/decremento grandes */}
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCantidadCuotas(Math.max(1, cantidadCuotas - 1))}
+                                        disabled={cantidadCuotas <= 1 || periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase())))}
+                                        className="bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-white font-black text-3xl w-16 h-16 rounded-2xl transition-all hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg"
+                                    >
+                                        −
+                                    </button>
+                                    <div className="flex-1 bg-gradient-to-br from-blue-50 to-cyan-50 border-4 border-blue-300 rounded-2xl p-4 text-center shadow-inner">
+                                        <span className="text-5xl font-black text-blue-600">{cantidadCuotas}</span>
+                                        <div className="text-xs text-gray-500 mt-1 font-bold">
+                                            {cantidadCuotas === 1 ? "cuota" : "cuotas"}
+                                        </div>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCantidadCuotas(cantidadCuotas + 1)}
+                                        disabled={periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase())))}
+                                        className="bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white font-black text-3xl w-16 h-16 rounded-2xl transition-all hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+
+                                {/* Botones de acceso rápido */}
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[1, 3, 6, 12].map(num => (
+                                        <button
+                                            key={num}
+                                            type="button"
+                                            onClick={() => setCantidadCuotas(num)}
+                                            className={`py-2 px-3 rounded-xl font-bold text-sm transition-all ${cantidadCuotas === num
+                                                    ? "bg-blue-600 text-white shadow-md scale-105"
+                                                    : "bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-105"
+                                                }`}
+                                        >
+                                            {num}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
                             {periodos.find(p => p.id === periodoId && MESES.some(m => p.nombre?.toLowerCase().includes(m.nombre.toLowerCase()))) && (
                                 <p className="text-sm text-blue-600 mt-2 font-bold ml-1">🔒 Fijo en 1 cuota</p>
                             )}
@@ -692,33 +738,16 @@ export default function PagosMensuales() {
                             />
                         </div>
 
-                        {/* Fila 2 - Columna 3: Estado */}
+                        {/* Fila 2 - Columna 3: Botón Registrar */}
                         <div>
-                            <label className="block text-xl font-bold text-gray-700 mb-3">Estado</label>
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setEstado("pagado")}
-                                    className={`flex-1 p-4 rounded-xl font-black text-lg transition-all ${estado === "pagado"
-                                        ? "bg-green-600 text-white shadow-lg scale-105"
-                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                        }`}
-                                >
-                                    <Check className="inline h-5 w-5 mr-1" />
-                                    Pagado
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setEstado("pendiente")}
-                                    className={`flex-1 p-4 rounded-xl font-black text-lg transition-all ${estado === "pendiente"
-                                        ? "bg-yellow-500 text-white shadow-lg scale-105"
-                                        : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                                        }`}
-                                >
-                                    <Clock className="inline h-5 w-5 mr-1" />
-                                    Pendiente
-                                </button>
-                            </div>
+                            <label className="block text-xl font-bold text-gray-700 mb-3">Acción</label>
+                            <button
+                                type="submit"
+                                disabled={guardando}
+                                className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-xl font-black py-4 rounded-2xl hover:shadow-2xl hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed h-[60px]"
+                            >
+                                {guardando ? "Guardando..." : "✅ Registrar Pago"}
+                            </button>
                         </div>
 
                         {/* Fila 3 - Columna Completa: Comprobante */}
@@ -758,6 +787,7 @@ export default function PagosMensuales() {
 
                             {modoComprobante === "unico" ? (
                                 <input
+                                    ref={comprobanteUnicoRef}
                                     type="file"
                                     accept="image/*,application/pdf"
                                     onChange={(e) => setComprobante(e.target.files[0])}
@@ -777,6 +807,7 @@ export default function PagosMensuales() {
                                                         {MESES.find(m => m.numero === cuota.mes)?.nombre} {cuota.anio}
                                                     </span>
                                                     <input
+                                                        ref={(el) => comprobantesIndividualesRefs.current[idx] = el}
                                                         type="file"
                                                         accept="image/*,application/pdf"
                                                         onChange={(e) => {
@@ -828,20 +859,7 @@ export default function PagosMensuales() {
                             </div>
                         )}
 
-                        {/* Observaciones - Full Width */}
-                        {/* Observaciones Removed */}
-                        <div className="md:col-span-3"></div>
-
                     </div>
-
-                    {/* Botón Submit */}
-                    <button
-                        type="submit"
-                        disabled={guardando}
-                        className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-2xl font-black py-4 rounded-2xl hover:shadow-2xl hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-6"
-                    >
-                        {guardando ? "Guardando..." : "✅ Registrar Pago"}
-                    </button>
                 </form>
             </div>
 
