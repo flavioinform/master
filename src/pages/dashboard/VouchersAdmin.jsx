@@ -624,10 +624,21 @@ export default function VouchersAdmin() {
       };
     });
 
+    // ✅ Generar nombre dinámico del archivo
+    let fileName;
+    if (mesHistorial !== "todos") {
+      // Si hay un mes específico seleccionado
+      const mesNombre = MESES.find(m => m.n === parseInt(mesHistorial))?.name.toLowerCase();
+      fileName = `reporte_de_pagos_${mesNombre}_${anioHistorial}.xlsx`;
+    } else {
+      // Si es "todos los meses"
+      fileName = `reporte_de_pagos_${anioHistorial}.xlsx`;
+    }
+
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, `Pagos_${anioHistorial}`);
-    XLSX.writeFile(wb, `Reporte_Pagos_${anioHistorial}.xlsx`);
+    XLSX.writeFile(wb, fileName);
   };
 
 
@@ -1142,21 +1153,21 @@ export default function VouchersAdmin() {
             </div>
 
             {/* Stats resumidas */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
-                  <History className="h-20 w-20 text-slate-900" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                  <History className="h-12 w-12 text-slate-900" />
                 </div>
-                <p className="text-sm font-black text-slate-400 uppercase tracking-widest mb-2">Total Recaudado Anual</p>
-                <h3 className="text-5xl font-black text-slate-900">${statsHistorial.totalAnual.toLocaleString()}</h3>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Recaudado Anual</p>
+                <h3 className="text-3xl font-black text-slate-900">${statsHistorial.totalAnual.toLocaleString()}</h3>
               </div>
 
-              <div className="bg-blue-600 border border-blue-500 p-8 rounded-3xl shadow-lg shadow-blue-500/20 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
-                  <DollarSign className="h-20 w-20 text-white" />
+              <div className="bg-blue-600 border border-blue-500 p-4 rounded-2xl shadow-lg shadow-blue-500/20 relative overflow-hidden group">
+                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:scale-110 transition-transform">
+                  <DollarSign className="h-12 w-12 text-white" />
                 </div>
-                <p className="text-sm font-black text-blue-100 uppercase tracking-widest mb-2">Recaudación del Mes</p>
-                <h3 className="text-5xl font-black text-white">${statsHistorial.totalMensual.toLocaleString()}</h3>
+                <p className="text-[10px] font-black text-blue-100 uppercase tracking-widest mb-1">Recaudación del Mes</p>
+                <h3 className="text-3xl font-black text-white">${statsHistorial.totalMensual.toLocaleString()}</h3>
               </div>
             </div>
 
@@ -1918,82 +1929,82 @@ function VoucherCard({ v, onView, onReview, onDownload, onDelete, onEdit }) {
   const [comentario, setComentario] = useState(v.comentario || "");
 
   return (
-    <div className={`border p-6 rounded-[2rem] shadow-sm space-y-6 animate-in fade-in duration-500 hover:shadow-md transition-all group ${v.estado === 'aprobado'
+    <div className={`border p-4 rounded-xl shadow-sm space-y-3 animate-in fade-in duration-500 hover:shadow-md transition-all group ${v.estado === 'aprobado'
       ? 'bg-emerald-50 border-emerald-200'
       : v.estado === 'rechazado'
         ? 'bg-red-50 border-red-200'
         : 'bg-white border-slate-200'
       }`}>
-      <div className="flex flex-col xl:flex-row justify-between items-start gap-6">
+      <div className="flex flex-col xl:flex-row justify-between items-start gap-3">
         {/* Info Socio */}
-        <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-slate-900 rounded-2xl flex items-center justify-center text-white text-2xl font-black group-hover:scale-110 transition-transform">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-white text-lg font-black group-hover:scale-110 transition-transform">
             {v.profiles?.nombre_completo?.charAt(0) || "U"}
           </div>
           <div>
-            <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight leading-none mb-1">{v.profiles?.nombre_completo}</h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em]">{v.profiles?.rut}</p>
+            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight leading-none mb-0.5">{v.profiles?.nombre_completo}</h3>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.15em]">{v.profiles?.rut}</p>
           </div>
         </div>
 
         {/* Detalles Voucher */}
-        <div className="flex flex-wrap gap-2">
-          <span className="bg-slate-900 text-white px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider">
+        <div className="flex flex-wrap gap-1.5">
+          <span className="bg-slate-900 text-white px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider">
             {v.payment_periods?.nombre}
           </span>
-          <span className="bg-blue-50 text-blue-600 border border-blue-100 px-4 py-1.5 rounded-lg text-xs font-black">
+          <span className="bg-blue-50 text-blue-600 border border-blue-100 px-3 py-1 rounded-lg text-[10px] font-black">
             ${(v.monto_individual || v.payment_periods?.monto || 0).toLocaleString()}
           </span>
           {v.total_cuotas > 0 && (
-            <span className="bg-slate-50 border border-slate-100 px-4 py-1.5 rounded-lg text-[10px] font-black text-slate-500 uppercase">
+            <span className="bg-slate-50 border border-slate-100 px-3 py-1 rounded-lg text-[9px] font-black text-slate-500 uppercase">
               CUOTA {v.cuota_numero}/{v.total_cuotas}
             </span>
           )}
           {v.mes && (
-            <span className="bg-amber-50 border border-amber-100 px-4 py-1.5 rounded-lg text-[10px] font-black text-amber-600 uppercase">
+            <span className="bg-amber-50 border border-amber-100 px-3 py-1 rounded-lg text-[9px] font-black text-amber-600 uppercase">
               MES: {MESES.find(m => m.n === v.mes)?.name}
             </span>
           )}
           {v.anio && (
-            <span className="bg-indigo-50 border border-indigo-100 px-4 py-1.5 rounded-lg text-[10px] font-black text-indigo-600 uppercase">
+            <span className="bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-lg text-[9px] font-black text-indigo-600 uppercase">
               AÑO: {v.anio}
             </span>
           )}
         </div>
 
         {/* Acciones Rápidas */}
-        <div className="flex gap-2">
+        <div className="flex gap-1.5">
           {v.archivo_path && v.archivo_path !== "SIN_COMPROBANTE" && (
             <button
               onClick={() => onView(v.archivo_path)}
-              className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-600 transition-all shadow-sm"
+              className="w-8 h-8 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-600 transition-all shadow-sm"
               title="VER COMPROBANTE"
             >
-              <FileText className="h-5 w-5" />
+              <FileText className="h-4 w-4" />
             </button>
           )}
           <button
             onClick={onEdit}
-            className="w-10 h-10 bg-white border border-slate-200 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm"
+            className="w-8 h-8 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-900 transition-all shadow-sm"
           >
-            <Edit className="h-5 w-5" />
+            <Edit className="h-4 w-4" />
           </button>
           <button
             onClick={() => onDelete(v.id, v.archivo_path)}
-            className="w-10 h-10 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-100 transition-all shadow-sm"
+            className="w-8 h-8 bg-slate-50 border border-slate-100 rounded-lg flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-100 transition-all shadow-sm"
           >
-            <Trash2 className="h-5 w-5" />
+            <Trash2 className="h-4 w-4" />
           </button>
         </div>
       </div>
 
       {/* Acción de Validación */}
-      <div className="pt-6 border-t border-slate-100 space-y-4">
-        <div className="flex flex-col md:flex-row gap-4">
+      <div className="pt-3 border-t border-slate-100 space-y-2">
+        <div className="flex flex-col md:flex-row gap-2">
           <div className="relative flex-1">
-            <MessageSquare className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
+            <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-300" />
             <input
-              className="w-full bg-slate-50 border border-slate-100 pl-11 pr-6 py-3.5 rounded-xl text-xs font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase placeholder:text-slate-300"
+              className="w-full bg-slate-50 border border-slate-100 pl-9 pr-4 py-2 rounded-lg text-[10px] font-bold text-slate-900 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase placeholder:text-slate-300"
               placeholder="Nota para el socio..."
               value={comentario}
               onChange={e => setComentario(e.target.value)}
@@ -2002,13 +2013,13 @@ function VoucherCard({ v, onView, onReview, onDownload, onDelete, onEdit }) {
           <div className="flex gap-2">
             <button
               onClick={() => onReview(v.id, "aprobado", comentario)}
-              className="flex-1 md:flex-none px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all active:scale-95 uppercase tracking-wider"
+              className="flex-1 md:flex-none px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] shadow-lg shadow-emerald-500/20 transition-all active:scale-95 uppercase tracking-wider"
             >
               APROBAR
             </button>
             <button
               onClick={() => onReview(v.id, "rechazado", comentario)}
-              className="flex-1 md:flex-none px-8 py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-rose-500/20 transition-all active:scale-95 uppercase tracking-wider"
+              className="flex-1 md:flex-none px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-[10px] shadow-lg shadow-rose-500/20 transition-all active:scale-95 uppercase tracking-wider"
             >
               RECHAZAR
             </button>
