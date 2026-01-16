@@ -38,6 +38,7 @@ export default function CompetitionManager() {
     const [activeTab, setActiveTab] = useState("stages");
     const [enrollments, setEnrollments] = useState([]);
     const [loadingEnrollments, setLoadingEnrollments] = useState(false);
+    const [searchEnrollments, setSearchEnrollments] = useState("");
 
     const [showStageModal, setShowStageModal] = useState(false);
     const [showEventModal, setShowEventModal] = useState(false);
@@ -144,21 +145,34 @@ export default function CompetitionManager() {
         const excelData = [];
 
         userMap.forEach((userData) => {
-            userData.events.forEach((evt, idx) => {
-                excelData.push({
-                    "Nombre": idx === 0 ? userData.nombre : "",
-                    "RUT": idx === 0 ? userData.rut : "",
-                    "Fecha Nacimiento": idx === 0 ? userData.fecha_nacimiento : "",
-                    "Categoría": idx === 0 ? calcularCategoria(userData.fecha_nacimiento) : "",
-                    "Teléfono": idx === 0 ? userData.telefono : "",
-                    "Talla": idx === 0 ? userData.talla : "",
-                    "Etapa": evt.stage,
-                    "N° Prueba": evt.eventNumber,
-                    "Prueba": evt.eventName,
-                    "Tiempo": evt.time,
-                    "Estado": evt.status
-                });
-            });
+            const row = {
+                "Nombre": userData.nombre,
+                "RUT": userData.rut,
+                "Fecha Nacimiento": userData.fecha_nacimiento,
+                "Categoría": calcularCategoria(userData.fecha_nacimiento),
+                "Teléfono": userData.telefono,
+                "Talla": userData.talla
+            };
+
+            // Agregar hasta 5 competencias como columnas
+            for (let i = 0; i < 5; i++) {
+                const evt = userData.events[i];
+                if (evt) {
+                    row[`Competencia ${i + 1}`] = evt.stage;
+                    row[`N° Prueba ${i + 1}`] = evt.eventNumber;
+                    row[`Prueba ${i + 1}`] = evt.eventName;
+                    row[`Tiempo ${i + 1}`] = evt.time;
+                    row[`Estado ${i + 1}`] = evt.status;
+                } else {
+                    row[`Competencia ${i + 1}`] = "";
+                    row[`N° Prueba ${i + 1}`] = "";
+                    row[`Prueba ${i + 1}`] = "";
+                    row[`Tiempo ${i + 1}`] = "";
+                    row[`Estado ${i + 1}`] = "";
+                }
+            }
+
+            excelData.push(row);
         });
 
         const ws = XLSX.utils.json_to_sheet(excelData);
@@ -326,7 +340,14 @@ export default function CompetitionManager() {
                         <div className="flex justify-between items-center mb-4">
                             <div>
                                 <h3 className="text-xl font-bold">Inscripciones</h3>
-                                <p className="text-sm text-gray-500">Total: {enrollments.length} pruebas inscritas</p>
+                                <p className="text-sm text-gray-500">Total: {enrollments.filter(enr => {
+                                    const searchLower = searchEnrollments.toLowerCase();
+                                    return (
+                                        enr.profiles?.nombre_completo?.toLowerCase().includes(searchLower) ||
+                                        enr.profiles?.rut?.toLowerCase().includes(searchLower) ||
+                                        enr.competition_events?.event_catalog?.name?.toLowerCase().includes(searchLower)
+                                    );
+                                }).length} pruebas inscritas</p>
                             </div>
                             <button
                                 onClick={exportToExcel}
@@ -335,6 +356,17 @@ export default function CompetitionManager() {
                             >
                                 <span>📊</span> Exportar Excel
                             </button>
+                        </div>
+
+                        {/* Buscador */}
+                        <div className="mb-4">
+                            <input
+                                type="text"
+                                placeholder="🔍 Buscar por nombre, RUT o prueba..."
+                                value={searchEnrollments}
+                                onChange={(e) => setSearchEnrollments(e.target.value)}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-gray-50 text-gray-800"
+                            />
                         </div>
 
                         {loadingEnrollments ? (
@@ -358,14 +390,21 @@ export default function CompetitionManager() {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y">
-                                        {enrollments.map(enr => (
+                                        {enrollments.filter(enr => {
+                                            const searchLower = searchEnrollments.toLowerCase();
+                                            return (
+                                                enr.profiles?.nombre_completo?.toLowerCase().includes(searchLower) ||
+                                                enr.profiles?.rut?.toLowerCase().includes(searchLower) ||
+                                                enr.competition_events?.event_catalog?.name?.toLowerCase().includes(searchLower)
+                                            );
+                                        }).map(enr => (
                                             <tr
                                                 key={enr.id}
                                                 className={`transition-colors ${enr.status === 'rejected'
-                                                        ? 'bg-red-50 hover:bg-red-100'
-                                                        : enr.status === 'confirmed'
-                                                            ? 'bg-green-50 hover:bg-green-100'
-                                                            : 'hover:bg-gray-50'
+                                                    ? 'bg-red-50 hover:bg-red-100'
+                                                    : enr.status === 'confirmed'
+                                                        ? 'bg-green-50 hover:bg-green-100'
+                                                        : 'hover:bg-gray-50'
                                                     }`}
                                             >
                                                 <td className="p-3 font-medium">{enr.profiles.nombre_completo}</td>
@@ -385,10 +424,10 @@ export default function CompetitionManager() {
                                                 </td>
                                                 <td className="p-3 text-center">
                                                     <span className={`px-2 py-1 rounded text-[10px] font-black uppercase ${enr.status === 'confirmed'
-                                                            ? 'bg-green-100 text-green-700 border border-green-200'
-                                                            : enr.status === 'rejected'
-                                                                ? 'bg-red-100 text-red-700 border border-red-200'
-                                                                : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                                                        ? 'bg-green-100 text-green-700 border border-green-200'
+                                                        : enr.status === 'rejected'
+                                                            ? 'bg-red-100 text-red-700 border border-red-200'
+                                                            : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
                                                         }`}>
                                                         {enr.status === 'confirmed' ? 'Aprobado' : enr.status === 'rejected' ? 'Rechazado' : 'Pendiente'}
                                                     </span>
@@ -651,7 +690,7 @@ function EventModal({ stage, onClose, onReload }) {
                                 <div>
                                     <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Estilo</label>
                                     <select className="w-full border rounded-lg p-2.5 font-bold" value={newEvt.style} onChange={e => setNewEvt({ ...newEvt, style: e.target.value })}>
-                                        {['libre', 'pecho', 'espalda', 'mariposa', 'combinado', 'relevo'].map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
+                                        {['libre', 'pecho', 'espalda', 'mariposa', 'combinado', 'relevo', 'relevo-libre', 'relevo-pecho', 'relevo-espalda', 'relevo-mariposa', 'relevo-combinado'].map(s => <option key={s} value={s}>{s.toUpperCase()}</option>)}
                                     </select>
                                 </div>
                             </div>
