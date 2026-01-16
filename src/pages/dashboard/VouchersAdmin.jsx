@@ -592,18 +592,37 @@ export default function VouchersAdmin() {
       return;
     }
 
-    const dataToExport = vouchersHistorial.map(v => ({
-      "Fecha Pago": new Date(v.created_at).toLocaleDateString(),
-      "RUT": v.profiles?.rut || v.user_id,
-      "Nombre": v.profiles?.nombre_completo || "Desconocido",
-      "Concepto": v.payment_periods?.concepto || "N/A",
-      "Periodo": v.payment_periods?.nombre || "N/A",
-      "Monto": v.monto_individual !== undefined && v.monto_individual !== null ? v.monto_individual : (v.payment_periods?.monto || 0),
-      "Cuota": v.total_cuotas ? `${v.cuota_numero}/${v.total_cuotas}` : "Única",
-      "Mes Corresp.": v.mes ? MESES.find(m => m.n === v.mes)?.name : "N/A",
-      "Año Corresp.": v.anio || "N/A",
-      "Estado": v.estado
-    }));
+    const dataToExport = vouchersHistorial.map(v => {
+      // Si no tiene mes asignado, usar el mes de created_at
+      let mesCorresp = "N/A";
+      if (v.mes) {
+        mesCorresp = MESES.find(m => m.n === v.mes)?.name;
+      } else if (v.created_at) {
+        const fechaPago = new Date(v.created_at);
+        const mesNumero = fechaPago.getMonth() + 1;
+        mesCorresp = MESES.find(m => m.n === mesNumero)?.name || "N/A";
+      }
+
+      // Formatear cuota correctamente
+      let cuotaTexto = "Única";
+      if (v.total_cuotas && v.total_cuotas > 1) {
+        const numeroCuota = v.cuota_numero || 1;
+        cuotaTexto = `${numeroCuota}/${v.total_cuotas}`;
+      }
+
+      return {
+        "Fecha Pago": new Date(v.created_at).toLocaleDateString(),
+        "RUT": v.profiles?.rut || v.user_id,
+        "Nombre": v.profiles?.nombre_completo || "Desconocido",
+        "Concepto": v.payment_periods?.concepto || "N/A",
+        "Periodo": v.payment_periods?.nombre || "N/A",
+        "Monto": v.monto_individual !== undefined && v.monto_individual !== null ? v.monto_individual : (v.payment_periods?.monto || 0),
+        "Cuota": cuotaTexto,
+        "Mes Corresp.": mesCorresp,
+        "Año Corresp.": v.anio || new Date(v.created_at).getFullYear(),
+        "Estado": v.estado
+      };
+    });
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
     const wb = XLSX.utils.book_new();
@@ -1071,41 +1090,54 @@ export default function VouchersAdmin() {
         {tab === "historial" && (
           <div className="space-y-10 animate-in fade-in duration-500">
             {/* Header with Filters */}
-            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm flex flex-col xl:flex-row justify-between items-center gap-8">
-              <div>
-                <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-none mb-1">Historial Global</h2>
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Registros históricos de pagos</p>
-              </div>
-
-              <div className="flex flex-wrap gap-4 items-center">
-                <div className="flex bg-slate-50 border border-slate-200 p-2 rounded-xl gap-2">
-                  <select
-                    className="bg-transparent text-sm font-bold text-slate-700 px-4 py-2 outline-none"
-                    value={anioHistorial}
-                    onChange={e => setAnioHistorial(e.target.value)}
-                  >
-                    {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => <option key={y} value={y}>AÑO {y}</option>)}
-                    <option disabled>──────────</option>
-                    {RANGE_ANIOS.filter(y => y < 2024 || y > 2030).map(y => <option key={y} value={y}>AÑO {y}</option>)}
-                  </select>
-                  <div className="w-px h-6 bg-slate-200 self-center"></div>
-                  <select
-                    className="bg-transparent text-sm font-bold text-slate-700 px-4 py-2 outline-none"
-                    value={mesHistorial}
-                    onChange={e => setMesHistorial(e.target.value)}
-                  >
-                    <option value="todos">TODOS LOS MESES</option>
-                    {MESES.map(m => <option key={m.n} value={m.n}>{m.name.toUpperCase()}</option>)}
-                  </select>
+            <div className="bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm space-y-6">
+              <div className="flex flex-col xl:flex-row justify-between items-center gap-6">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight leading-none mb-1">Historial Global</h2>
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">Registros históricos de pagos</p>
                 </div>
 
-                <button
-                  onClick={exportarExcel}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5"
-                >
-                  <Download className="h-4 w-4" />
-                  EXPORTAR EXCEL
-                </button>
+                <div className="flex flex-wrap gap-4 items-center">
+                  <div className="flex bg-slate-50 border border-slate-200 p-2 rounded-xl gap-2">
+                    <select
+                      className="bg-transparent text-sm font-bold text-slate-700 px-4 py-2 outline-none"
+                      value={anioHistorial}
+                      onChange={e => setAnioHistorial(e.target.value)}
+                    >
+                      {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => <option key={y} value={y}>AÑO {y}</option>)}
+                      <option disabled>──────────</option>
+                      {RANGE_ANIOS.filter(y => y < 2024 || y > 2030).map(y => <option key={y} value={y}>AÑO {y}</option>)}
+                    </select>
+                    <div className="w-px h-6 bg-slate-200 self-center"></div>
+                    <select
+                      className="bg-transparent text-sm font-bold text-slate-700 px-4 py-2 outline-none"
+                      value={mesHistorial}
+                      onChange={e => setMesHistorial(e.target.value)}
+                    >
+                      <option value="todos">TODOS LOS MESES</option>
+                      {MESES.map(m => <option key={m.n} value={m.n}>{m.name.toUpperCase()}</option>)}
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={exportarExcel}
+                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-500/20 transition-all hover:-translate-y-0.5"
+                  >
+                    <Download className="h-4 w-4" />
+                    EXPORTAR EXCEL
+                  </button>
+                </div>
+              </div>
+
+              {/* Search Bar */}
+              <div className="relative group">
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
+                <input
+                  className="w-full bg-slate-50 border border-slate-200 py-4 pl-14 pr-6 rounded-2xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase placeholder:text-slate-300"
+                  placeholder="BUSCAR POR NOMBRE, RUT O CONCEPTO..."
+                  value={busquedaHistorial}
+                  onChange={e => setBusquedaHistorial(e.target.value)}
+                />
               </div>
             </div>
 
@@ -1153,21 +1185,21 @@ export default function VouchersAdmin() {
                       vouchersHistorial.map(v => (
                         <tr key={v.id} className="hover:bg-slate-50 transition-colors group">
                           <td className="px-8 py-6">
-                            <div className="flex items-center gap-2">
-                              <img src={master12Logo} alt="Club Master" className="h-6 w-6" />
+                            <div className="flex items-center gap-3">
+                              <img src={master12Logo} alt="Club Master" className="h-7 w-7" />
                               <div>
                                 {v.mes && v.anio ? (
-                                  <div className="text-sm font-black text-slate-900">
+                                  <div className="text-base font-black text-slate-900 bg-blue-50 px-3 py-1 rounded-lg inline-block">
                                     {MESES.find(m => m.n === v.mes)?.name} {v.anio}
                                   </div>
                                 ) : v.anio ? (
-                                  <div className="text-sm font-black text-slate-900">{v.anio}</div>
+                                  <div className="text-base font-black text-slate-900 bg-blue-50 px-3 py-1 rounded-lg inline-block">{v.anio}</div>
                                 ) : (
                                   <div className="text-sm font-bold text-slate-400">
                                     {new Date(v.created_at).toLocaleDateString("es-CL", { month: "short", year: "numeric" })}
                                   </div>
                                 )}
-                                <div className="text-[9px] font-bold text-slate-400 uppercase">Subido: {new Date(v.created_at).toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit" })}</div>
+                                <div className="text-[11px] font-bold text-blue-600 uppercase mt-1.5 bg-blue-50 px-2 py-0.5 rounded inline-block">📅 Fecha de pago realizado: {new Date(v.created_at).toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric" })}</div>
                               </div>
                             </div>
                           </td>

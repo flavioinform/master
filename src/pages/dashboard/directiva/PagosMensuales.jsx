@@ -219,14 +219,39 @@ export default function PagosMensuales() {
                     const anioEspecificoMatch = period.nombre.match(/(20\d{2})/);
                     const anioEspecifico = anioEspecificoMatch ? parseInt(anioEspecificoMatch[1]) : null;
 
+                    console.log("🔍 DEBUG CUOTAS:", {
+                        periodoNombre: period.nombre,
+                        mesEspecifico: mesEspecifico?.nombre,
+                        anioEspecifico,
+                        fechaIngreso: profile?.fecha_ingreso,
+                        ultimoPago
+                    });
+
                     if (mesEspecifico && anioEspecifico) {
                         // Caso 1: Periodo ESPECÍFICO (Ej: Marzo 2025) -> Forzar ese mes/año
                         proximoMes = mesEspecifico.numero;
                         proximoAnio = anioEspecifico;
-                        // NO aplicamos lógica de siguiente mes ni de fecha ingreso aquí
-                        // porque el admin explícitamente eligió "Marzo 2025"
+
+                        console.log("📅 Periodo ESPECÍFICO detectado:", mesEspecifico.nombre, anioEspecifico);
+
+                        // ✅ CORRECCIÓN: Validar fecha de ingreso TAMBIÉN para periodos específicos
+                        if (profile?.fecha_ingreso) {
+                            // ✅ FIX: Parsear fecha manualmente para evitar problemas de zona horaria
+                            const [anioIngreso, mesIngreso, diaIngreso] = profile.fecha_ingreso.split('-').map(Number);
+
+                            console.log("🔍 Validando fecha ingreso:", { mesIngreso, anioIngreso, proximoMes, proximoAnio });
+
+                            // Si el periodo específico es ANTERIOR a la fecha de ingreso, ajustar al mes de ingreso
+                            if (anioEspecifico < anioIngreso || (anioEspecifico === anioIngreso && mesEspecifico.numero < mesIngreso)) {
+                                console.log("⚠️ Periodo anterior a fecha ingreso, ajustando...");
+                                proximoMes = mesIngreso;
+                                proximoAnio = anioIngreso;
+                            }
+                        }
                     } else {
                         // Caso 2: Periodo GENÉRICO (Ej: Cuota Mensual 2025) -> Calcular siguiente disponible
+                        console.log("📅 Periodo GENÉRICO detectado");
+
                         if (ultimoPago && ultimoPago.mes) {
                             proximoMes = ultimoPago.mes + 1;
                             proximoAnio = ultimoPago.anio;
@@ -241,17 +266,21 @@ export default function PagosMensuales() {
 
                         // ✅ Si el socio tiene fecha de ingreso, ajustar el mes inicial SOLO para periodos genéricos
                         if (profile?.fecha_ingreso) {
-                            const fechaIngreso = new Date(profile.fecha_ingreso);
-                            const mesIngreso = fechaIngreso.getMonth() + 1;
-                            const anioIngreso = fechaIngreso.getFullYear();
+                            // ✅ FIX: Parsear fecha manualmente para evitar problemas de zona horaria
+                            const [anioIngreso, mesIngreso, diaIngreso] = profile.fecha_ingreso.split('-').map(Number);
+
+                            console.log("🔍 Validando fecha ingreso (genérico):", { mesIngreso, anioIngreso, proximoMes, proximoAnio });
 
                             // Si el próximo mes calculado es anterior a la fecha de ingreso, ajustar
                             if (proximoAnio < anioIngreso || (proximoAnio === anioIngreso && proximoMes < mesIngreso)) {
+                                console.log("⚠️ Mes calculado anterior a fecha ingreso, ajustando...");
                                 proximoMes = mesIngreso;
                                 proximoAnio = anioIngreso;
                             }
                         }
                     }
+
+                    console.log("✅ Mes final calculado:", { proximoMes, proximoAnio });
 
                     let currMes = proximoMes;
                     let currAnio = proximoAnio;
