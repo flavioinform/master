@@ -102,6 +102,14 @@ export default function VouchersAdmin() {
   const [nuevoConceptoName, setNuevoConceptoName] = useState("");
   const [modalError, setModalError] = useState("");
 
+  // ✅ Estados para modal de selección de periodo en importación Excel
+  const [showPeriodSelectionModal, setShowPeriodSelectionModal] = useState(false);
+  const [importData, setImportData] = useState(null); // { file, anio, mes, nombreArchivo, jsonData }
+  const [usarPeriodoExistente, setUsarPeriodoExistente] = useState(true); // true = existente, false = nuevo
+  const [periodoSeleccionadoImport, setPeriodoSeleccionadoImport] = useState("");
+  const [nombreNuevoPeriodo, setNombreNuevoPeriodo] = useState("");
+
+
   const load = async () => {
     setLoading(true);
     setMsg("");
@@ -221,32 +229,7 @@ export default function VouchersAdmin() {
       return;
     }
 
-    const mesesNombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-
-    // Pedir nombre del periodo (sugerir nombre del archivo)
-    const nombrePeriodo = prompt(
-      "¿Cómo se llama el periodo?\n(Presiona Enter para usar el nombre del archivo)",
-      nombreArchivo
-    );
-
-    if (!nombrePeriodo) {
-      e.target.value = '';
-      return;
-    }
-
-    const confirmImport = window.confirm(
-      `¿Confirmas importar este Excel?\n\nPeriodo: ${nombrePeriodo}\nAño: ${anio}\nMes: ${mesesNombres[mes - 1]}`
-    );
-
-    if (!confirmImport) {
-      e.target.value = '';
-      return;
-    }
-
     try {
-      setLoading(true);
-
       // Leer archivo Excel
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
@@ -257,57 +240,66 @@ export default function VouchersAdmin() {
 
       if (jsonData.length === 0) {
         alert("El archivo está vacío");
-        setLoading(false);
         e.target.value = '';
         return;
       }
 
-      // Buscar periodo por nombre (flexible: case-insensitive y trim)
-      // Primero intentar búsqueda exacta
-      let { data: periodo, error: periodoError } = await supabase
-        .from("payment_periods")
-        .select("id, nombre")
-        .eq("nombre", nombrePeriodo.trim())
-        .maybeSingle();
+      // ✅ Guardar datos y mostrar modal de selección de periodo
+      setImportData({
+        file,
+        anio: parseInt(anio),
+        mes,
+        nombreArchivo,
+        jsonData
+      });
+      setNombreNuevoPeriodo(nombreArchivo); // Sugerir nombre del archivo
+      setShowPeriodSelectionModal(true);
+      e.target.value = ''; // Limpiar input
 
-      // Si no se encuentra, intentar búsqueda case-insensitive
-      if (!periodo) {
-        const { data: allPeriods } = await supabase
-          .from("payment_periods")
-          .select("id, nombre");
+    } catch (error) {
+      console.error("Error leyendo Excel:", error);
+      alert("Error al leer el archivo Excel: " + error.message);
+      e.target.value = '';
+    }
+  };
 
-        // Buscar coincidencia ignorando mayúsculas/minúsculas y espacios extra
-        const nombreNormalizado = nombrePeriodo.trim().toLowerCase().replace(/\s+/g, ' ');
-        periodo = allPeriods?.find(p =>
-          p.nombre.trim().toLowerCase().replace(/\s+/g, ' ') === nombreNormalizado
-        );
+  // ✅ Procesar importación después de seleccionar periodo
+  const procesarImportacionExcel = async () => {
+    if (!importData) return;
 
-        if (periodo) {
-          console.log(`✅ Periodo encontrado (búsqueda flexible): "${periodo.nombre}"`);
+    const { anio, mes, jsonData } = importData;
+    const mesesNombres = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+      "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+    try {
+      setLoading(true);
+      setShowPeriodSelectionModal(false);
+
+      let periodo;
+
+      // Determinar si usar periodo existente o crear nuevo
+      if (usarPeriodoExistente) {
+        // Usar periodo seleccionado del dropdown
+        periodo = periodos.find(p => p.id === periodoSeleccionadoImport);
+        if (!periodo) {
+          alert("Por favor selecciona un periodo válido");
+          setLoading(false);
+          return;
         }
+        console.log("✅ Usando periodo existente:", periodo.nombre);
       } else {
-        console.log(`✅ Periodo encontrado (búsqueda exacta): "${periodo.nombre}"`);
-      }
-
-      // Si no existe, ofrecer crearlo
-      if (periodoError || !periodo) {
-        const confirmarCrear = window.confirm(
-          `No se encontró el periodo "${nombrePeriodo}".\n\n¿Deseas crearlo ahora?`
-        );
-
-        if (!confirmarCrear) {
-          alert("Importación cancelada. Crea el periodo primero en la sección de Periodos.");
-          e.target.value = '';
+        // Crear nuevo periodo
+        if (!nombreNuevoPeriodo.trim()) {
+          alert("Por favor ingresa un nombre para el nuevo periodo");
           setLoading(false);
           return;
         }
 
-        // Crear periodo
         const { data: nuevoPeriodo, error: createError } = await supabase
           .from("payment_periods")
           .insert({
-            nombre: nombrePeriodo,
-            monto: 0, // Se puede ajustar después
+            nombre: nombreNuevoPeriodo.trim(),
+            monto: 0,
             activo: true,
             concepto: "Histórico"
           })
@@ -316,18 +308,15 @@ export default function VouchersAdmin() {
 
         if (createError) {
           alert("Error creando periodo: " + createError.message);
-          e.target.value = '';
           setLoading(false);
           return;
         }
 
         periodo = nuevoPeriodo;
-        console.log("✅ Periodo creado:", periodo);
-      } else {
-        console.log("✅ Periodo encontrado:", periodo);
+        console.log("✅ Periodo creado:", periodo.nombre);
       }
 
-      // 3. Pre-cargar usuarios para validación rápida y normalizada
+      // Pre-cargar usuarios para validación rápida
       const { data: allProfilesDB, error: errProfs } = await supabase
         .from("profiles")
         .select("id, rut");
@@ -343,7 +332,7 @@ export default function VouchersAdmin() {
         }
       });
 
-      // Procesar cada fila
+      // Procesar cada fila del Excel
       let exitosos = 0;
       let errores = 0;
       const erroresDetalle = [];
@@ -351,10 +340,9 @@ export default function VouchersAdmin() {
       for (const row of jsonData) {
         try {
           const rawRut = row.RUT?.toString().trim();
-          // Flexible amount field (monto, Monto, Pago, pago)
-          const monto = parseFloat(row.monto || row.Monto || row.Pago || row.pago);
+          const montoRow = parseFloat(row.monto || row.Monto || row.Pago || row.pago);
 
-          if (!rawRut || !monto || isNaN(monto)) {
+          if (!rawRut || !montoRow || isNaN(montoRow)) {
             console.warn("⚠️ Fila inválida:", row);
             errores++;
             erroresDetalle.push(`Fila inválida: ${JSON.stringify(row)}`);
@@ -365,7 +353,7 @@ export default function VouchersAdmin() {
           const userId = rutMap.get(cleanRut);
 
           if (!userId) {
-            console.warn(`⚠️ Usuario no encontrado: ${rawRut} (Normalizado: ${cleanRut})`);
+            console.warn(`⚠️ Usuario no encontrado: ${rawRut}`);
             errores++;
             erroresDetalle.push(`Usuario no encontrado: ${rawRut}`);
             continue;
@@ -377,13 +365,13 @@ export default function VouchersAdmin() {
             .insert({
               user_id: userId,
               period_id: periodo.id,
-              monto_individual: monto,
+              monto_individual: montoRow,
               estado: "aprobado",
               mes: mes,
               anio: parseInt(anio),
               cuota_numero: null,
               archivo_path: "excel-import/historico",
-              comentario: `Importado desde Excel: ${nombreArchivo}`,
+              comentario: `Importado desde Excel: ${importData.nombreArchivo}`,
               revisado_por: user.id
             });
 
@@ -393,7 +381,7 @@ export default function VouchersAdmin() {
             erroresDetalle.push(`Error insertando ${rawRut}: ${insertError.message}`);
           } else {
             exitosos++;
-            console.log(`✅ Importado: ${rawRut} - $${monto}`);
+            console.log(`✅ Importado: ${rawRut} - $${montoRow}`);
           }
         } catch (err) {
           console.error("❌ Error procesando fila:", row, err);
@@ -413,20 +401,26 @@ export default function VouchersAdmin() {
       }
 
       alert(mensaje);
+      setMsg(`Importación completada: ${exitosos} exitosos, ${errores} errores`);
+      setTipo(exitosos > 0 ? "success" : "error");
+
+      // Limpiar estados
+      setImportData(null);
+      setPeriodoSeleccionadoImport("");
+      setNombreNuevoPeriodo("");
+      setUsarPeriodoExistente(true);
 
       // Recargar datos
       await load();
 
-      // Limpiar input
-      e.target.value = '';
     } catch (error) {
-      console.error("❌ Error leyendo Excel:", error);
-      alert("Error al leer el archivo Excel:\n" + error.message);
-      e.target.value = '';
+      console.error("❌ Error en importación:", error);
+      alert("Error durante la importación: " + error.message);
     } finally {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     if (user?.id) load();
@@ -1915,6 +1909,128 @@ export default function VouchersAdmin() {
                       </div>
                     ))
                   )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Modal de Selección de Periodo para Importación Excel */}
+        {showPeriodSelectionModal && importData && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[120] p-6 animate-in fade-in duration-300">
+            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-white">
+              <header className="bg-gradient-to-r from-blue-600 to-cyan-600 px-8 py-6 flex justify-between items-center">
+                <div>
+                  <h3 className="text-2xl font-black text-white uppercase tracking-tight">Seleccionar Periodo</h3>
+                  <p className="text-sm font-bold text-blue-100 mt-1">
+                    Año: {importData.anio} | Mes: {MESES.find(m => m.n === importData.mes)?.name}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowPeriodSelectionModal(false);
+                    setImportData(null);
+                  }}
+                  className="bg-white/20 hover:bg-white/30 p-2 rounded-xl text-white transition-colors shadow-sm"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </header>
+
+              <div className="p-8 space-y-6">
+                {/* Opciones: Existente o Nuevo */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
+                    ¿Qué deseas hacer?
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setUsarPeriodoExistente(true)}
+                      className={`p-4 rounded-xl border-2 transition-all ${usarPeriodoExistente
+                        ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/10'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                        }`}
+                    >
+                      <div className="text-sm font-black text-slate-900 uppercase">Usar Existente</div>
+                      <div className="text-[10px] font-bold text-slate-400 mt-1">Seleccionar de la lista</div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUsarPeriodoExistente(false)}
+                      className={`p-4 rounded-xl border-2 transition-all ${!usarPeriodoExistente
+                        ? 'bg-blue-50 border-blue-600 ring-2 ring-blue-500/10'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                        }`}
+                    >
+                      <div className="text-sm font-black text-slate-900 uppercase">Crear Nuevo</div>
+                      <div className="text-[10px] font-bold text-slate-400 mt-1">Ingresar nombre</div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dropdown de Periodos Existentes (filtrado por año) */}
+                {usarPeriodoExistente && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
+                      Selecciona el Periodo
+                    </label>
+                    <select
+                      className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase"
+                      value={periodoSeleccionadoImport}
+                      onChange={(e) => setPeriodoSeleccionadoImport(e.target.value)}
+                    >
+                      <option value="">-- Selecciona un periodo --</option>
+                      {periodos
+                        .filter(p => p.nombre.includes(importData.anio.toString()))
+                        .map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.nombre} - {p.concepto} (${p.monto.toLocaleString()})
+                          </option>
+                        ))}
+                    </select>
+                    {periodos.filter(p => p.nombre.includes(importData.anio.toString())).length === 0 && (
+                      <p className="text-xs font-bold text-amber-600 mt-2 bg-amber-50 p-3 rounded-lg">
+                        ⚠️ No hay periodos del año {importData.anio}. Crea uno nuevo o cambia el año.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Input para Nuevo Periodo */}
+                {!usarPeriodoExistente && (
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
+                      Nombre del Nuevo Periodo
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full bg-slate-50 border border-slate-100 px-6 py-4 rounded-xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/10 focus:border-blue-600 transition-all uppercase"
+                      placeholder="Ej: CUOTA MENSUAL 2026"
+                      value={nombreNuevoPeriodo}
+                      onChange={(e) => setNombreNuevoPeriodo(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {/* Botones de Acción */}
+                <div className="flex gap-3 pt-4">
+                  <button
+                    onClick={procesarImportacionExcel}
+                    disabled={usarPeriodoExistente && !periodoSeleccionadoImport}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white p-4 rounded-xl font-bold transition-all shadow-lg shadow-blue-500/25 active:scale-[0.98] uppercase text-sm"
+                  >
+                    Continuar Importación
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowPeriodSelectionModal(false);
+                      setImportData(null);
+                    }}
+                    className="px-6 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-all uppercase text-sm"
+                  >
+                    Cancelar
+                  </button>
                 </div>
               </div>
             </div>
