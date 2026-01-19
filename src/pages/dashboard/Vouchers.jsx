@@ -21,6 +21,7 @@ export default function Vouchers() {
   const [misVouchersMap, setMisVouchersMap] = useState(new Map());
 
   const [file, setFile] = useState(null);
+  const [filesPorCuota, setFilesPorCuota] = useState({}); // { cuotaId: File }
   const [loading, setLoading] = useState(true);
   // eslint-disable-next-line no-unused-vars
   const [subiendo, setSubiendo] = useState(false);
@@ -386,6 +387,14 @@ export default function Vouchers() {
       if (errRes) throw errRes.error;
 
       setFile(null);
+      // Limpiar el archivo específico de la cuota
+      if (nroCuota && !cuotasArray) {
+        setFilesPorCuota(prev => {
+          const newFiles = { ...prev };
+          delete newFiles[nroCuota];
+          return newFiles;
+        });
+      }
       setMsg(cuotasArray ? `¡${cuotasArray.length} cuota(s) subida(s) exitosamente!` : `¡Cuota ${nroCuota} subida exitosamente!`);
       setTipo("success");
       setMultiCuotas(false);
@@ -535,18 +544,26 @@ export default function Vouchers() {
                         {isUploadingThis ? "Subiendo..." : "📤 Subir Nuevo Comprobante"}
                         <input type="file" className="hidden" accept="image/*,application/pdf"
                           onChange={(e) => {
-                            setFile(e.target.files?.[0]);
+                            const selectedFile = e.target.files?.[0];
+                            if (selectedFile) {
+                              setFilesPorCuota(prev => ({ ...prev, [i]: selectedFile }));
+                            }
                           }}
                         />
                       </label>
                     )}
                   </div>
                 )}
-                {file && !cuotaSubiendo && voucher.estado === "rechazado" && (
+                {filesPorCuota[i] && !cuotaSubiendo && voucher.estado === "rechazado" && (
                   <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl animate-in zoom-in-95">
-                    <p className="text-[10px] font-bold text-blue-600 truncate mb-3 italic">{file.name}</p>
+                    <p className="text-[10px] font-bold text-blue-600 truncate mb-3 italic">{filesPorCuota[i].name}</p>
                     <button
-                      onClick={() => esCuotaMensual ? subir(i, i, anioPeriodo) : subir(i)}
+                      onClick={() => {
+                        setFile(filesPorCuota[i]);
+                        setTimeout(() => {
+                          esCuotaMensual ? subir(i, i, anioPeriodo) : subir(i);
+                        }, 100);
+                      }}
                       className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-500/20"
                     >
                       Confirmar Subida
@@ -575,17 +592,25 @@ export default function Vouchers() {
                         className="hidden"
                         accept="image/*,application/pdf"
                         onChange={(e) => {
-                          setFile(e.target.files?.[0]);
+                          const selectedFile = e.target.files?.[0];
+                          if (selectedFile) {
+                            setFilesPorCuota(prev => ({ ...prev, [i]: selectedFile }));
+                          }
                         }}
                       />
                     </>
                   )}
                 </label>
-                {file && !cuotaSubiendo && (
+                {filesPorCuota[i] && !cuotaSubiendo && (
                   <div className="mt-4 p-5 bg-blue-50 border border-blue-100 rounded-2xl animate-in fade-in slide-in-from-bottom-2">
-                    <p className="text-[10px] font-bold text-blue-600 truncate mb-4 italic">{file.name}</p>
+                    <p className="text-[10px] font-bold text-blue-600 truncate mb-4 italic">{filesPorCuota[i].name}</p>
                     <button
-                      onClick={() => esCuotaMensual ? subir(i, i, anioPeriodo) : subir(i)}
+                      onClick={() => {
+                        setFile(filesPorCuota[i]);
+                        setTimeout(() => {
+                          esCuotaMensual ? subir(i, i, anioPeriodo) : subir(i);
+                        }, 100);
+                      }}
                       className="w-full bg-blue-600 text-white py-4 rounded-xl text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
                     >
                       Enviar Cuota {i}
@@ -922,91 +947,34 @@ export default function Vouchers() {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1">
                         1. Cantidad de cuotas
                       </label>
-                      <div className="space-y-3">
-                        {/* Botones de incremento/decremento grandes */}
-                        <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setNumCuotasAPagar(Math.max(1, numCuotasAPagar - 1))}
-                            disabled={numCuotasAPagar <= 1}
-                            className="bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-white font-black text-3xl w-16 h-16 rounded-2xl transition-all hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg"
-                          >
-                            −
-                          </button>
-                          <div className="flex-1 bg-gradient-to-br from-blue-50 to-cyan-50 border-4 border-blue-300 rounded-2xl p-4 text-center shadow-inner">
-                            <span className="text-5xl font-black text-blue-600">{numCuotasAPagar}</span>
-                            <div className="text-xs text-gray-500 mt-1 font-bold uppercase">
-                              {numCuotasAPagar === 1 ? "mes" : "meses"}
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const maxMeses = (() => {
-                                if (!periodoSel || !userProfile?.fecha_ingreso) return 12;
-                                const esMensual = periodoSel.concepto?.toLowerCase().includes("mensual") || periodoSel.nombre?.toLowerCase().includes("mensual");
-                                if (!esMensual) return 12;
+                      <input
+                        type="number"
+                        value={numCuotasAPagar}
+                        onChange={(e) => {
+                          const maxMeses = (() => {
+                            if (!periodoSel || !userProfile?.fecha_ingreso) return 12;
+                            const esMensual = periodoSel.concepto?.toLowerCase().includes("mensual") || periodoSel.nombre?.toLowerCase().includes("mensual");
+                            if (!esMensual) return 12;
 
-                                const fechaIngreso = new Date(userProfile.fecha_ingreso);
-                                const mesIngreso = fechaIngreso.getMonth() + 1;
-                                const anioIngreso = fechaIngreso.getFullYear();
+                            const fechaIngreso = new Date(userProfile.fecha_ingreso);
+                            const mesIngreso = fechaIngreso.getMonth() + 1;
+                            const anioIngreso = fechaIngreso.getFullYear();
 
-                                const matchAnio = periodoSel?.nombre?.match(/(20\d{2})/);
-                                const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : new Date().getFullYear();
+                            const matchAnio = periodoSel?.nombre?.match(/(20\d{2})/);
+                            const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : new Date().getFullYear();
 
-                                if (anioPeriodo === anioIngreso) {
-                                  return 12 - mesIngreso + 1;
-                                }
-                                return 12;
-                              })();
-                              setNumCuotasAPagar(Math.min(maxMeses, numCuotasAPagar + 1));
-                            }}
-                            className="bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white font-black text-3xl w-16 h-16 rounded-2xl transition-all hover:scale-110 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg"
-                          >
-                            +
-                          </button>
-                        </div>
-
-                        {/* Botones de acceso rápido */}
-                        <div className="grid grid-cols-4 gap-2">
-                          {[1, 3, 6, 12].map(num => {
-                            const maxMeses = (() => {
-                              if (!periodoSel || !userProfile?.fecha_ingreso) return 12;
-                              const esMensual = periodoSel.concepto?.toLowerCase().includes("mensual") || periodoSel.nombre?.toLowerCase().includes("mensual");
-                              if (!esMensual) return 12;
-
-                              const fechaIngreso = new Date(userProfile.fecha_ingreso);
-                              const mesIngreso = fechaIngreso.getMonth() + 1;
-                              const anioIngreso = fechaIngreso.getFullYear();
-
-                              const matchAnio = periodoSel?.nombre?.match(/(20\d{2})/);
-                              const anioPeriodo = matchAnio ? parseInt(matchAnio[1]) : new Date().getFullYear();
-
-                              if (anioPeriodo === anioIngreso) {
-                                return 12 - mesIngreso + 1;
-                              }
-                              return 12;
-                            })();
-
-                            return (
-                              <button
-                                key={num}
-                                type="button"
-                                onClick={() => setNumCuotasAPagar(Math.min(maxMeses, num))}
-                                disabled={num > maxMeses}
-                                className={`py-2 px-3 rounded-xl font-bold text-sm transition-all ${numCuotasAPagar === num
-                                    ? "bg-blue-600 text-white shadow-md scale-105"
-                                    : num > maxMeses
-                                      ? "bg-gray-100 text-gray-300 cursor-not-allowed"
-                                      : "bg-gray-100 text-gray-700 hover:bg-gray-200 hover:scale-105"
-                                  }`}
-                              >
-                                {num}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
+                            if (anioPeriodo === anioIngreso) {
+                              return 12 - mesIngreso + 1;
+                            }
+                            return 12;
+                          })();
+                          const val = Math.max(1, Math.min(maxMeses, parseInt(e.target.value) || 1));
+                          setNumCuotasAPagar(val);
+                        }}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 bg-gray-50 text-gray-800 text-center font-bold text-lg"
+                        min="1"
+                        max="12"
+                      />
                     </div>
 
                     <div className="space-y-4">
