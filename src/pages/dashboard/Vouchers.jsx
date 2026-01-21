@@ -494,30 +494,30 @@ export default function Vouchers() {
       }
 
       slots.push(
-        <div key={i} className={`bg-white border rounded-[2rem] p-6 md:p-8 transition-all shadow-sm hover:shadow-md flex flex-col justify-between min-h-[300px] group ${voucher?.estado === 'aprobado' ? 'border-emerald-100 bg-emerald-50/10' : 'border-slate-100 hover:border-blue-200'}`}>
-          <div className="space-y-6">
-            <div className="flex justify-between items-start gap-4">
-              <h4 className="font-black text-xl text-slate-900 leading-tight uppercase tracking-tight">{label}</h4>
-              <span className={`text-[10px] font-black px-3 py-1.5 rounded-lg border uppercase tracking-widest whitespace-nowrap ${estadoColor}`}>
+        <div key={i} className={`bg-white border rounded-[1.5rem] p-3 md:p-4 transition-all shadow-sm hover:shadow-md flex flex-col justify-between min-h-[150px] group ${voucher?.estado === 'aprobado' ? 'border-emerald-100 bg-emerald-50/10' : 'border-slate-100 hover:border-blue-200'}`}>
+          <div className="space-y-3">
+            <div className="flex justify-between items-start gap-2">
+              <h4 className="font-black text-sm text-slate-900 leading-tight uppercase tracking-tight">{label}</h4>
+              <span className={`text-[8px] font-black px-2 py-1 rounded-lg border uppercase tracking-widest whitespace-nowrap ${estadoColor}`}>
                 {estadoTexto}
               </span>
             </div>
 
             <div className="flex items-baseline gap-1">
-              <span className="text-sm font-bold text-blue-400">$</span>
-              <p className="text-3xl font-black text-slate-900 font-mono tracking-tight">
+              <span className="text-xs font-bold text-blue-400">$</span>
+              <p className="text-xl font-black text-slate-900 font-mono tracking-tight">
                 {/* Si el voucher existe y tiene monto guardado, usar ese. Si no, usar monto calculado */}
                 {(voucher && voucher.monto_individual) ? voucher.monto_individual.toLocaleString() : montoCuota.toLocaleString()}
               </p>
             </div>
           </div>
 
-          <div className="mt-8">
+          <div className="mt-4">
             {voucher ? (
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {/* Solo mostrar comentario si NO es importación Excel genérica */}
                 {voucher.comentario && voucher.archivo_path !== "excel-import/historico" && (
-                  <div className="bg-rose-50 text-rose-600 p-4 rounded-xl border border-rose-100 text-xs font-bold uppercase tracking-wider">
+                  <div className="bg-rose-50 text-rose-600 p-2 rounded-lg border border-rose-100 text-[9px] font-bold uppercase tracking-wider">
                     {voucher.comentario}
                   </div>
                 )}
@@ -531,16 +531,16 @@ export default function Vouchers() {
 
                 {/* Mostrar botón Ver Comprobante si NO es importación Excel genérica */}
                 {voucher.archivo_path !== "excel-import/historico" && (
-                  <div className="grid grid-cols-1 gap-3">
+                  <div className="grid grid-cols-1 gap-2">
                     <button
                       onClick={() => verArchivo(voucher.archivo_path)}
-                      className="w-full bg-slate-900 hover:bg-black text-white py-4 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg active:scale-95"
+                      className="w-full bg-slate-900 hover:bg-black text-white py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all shadow-sm active:scale-95"
                     >
                       Ver Comprobante
                     </button>
                     {/* ✅ Solo permitir cambiar archivo si está RECHAZADO */}
                     {voucher.estado === "rechazado" && !(periodoSel?.nombre?.toLowerCase().includes("histórico") || periodoSel?.concepto?.toLowerCase().includes("histórico")) && (
-                      <label className="w-full bg-rose-500 hover:bg-rose-600 text-white py-3 rounded-xl text-[10px] font-black uppercase text-center cursor-pointer transition-all active:scale-95">
+                      <label className="w-full bg-rose-500 hover:bg-rose-600 text-white py-2 rounded-lg text-[9px] font-black uppercase text-center cursor-pointer transition-all active:scale-95">
                         {isUploadingThis ? "Subiendo..." : "📤 Subir Nuevo Comprobante"}
                         <input type="file" className="hidden" accept="image/*,application/pdf"
                           onChange={(e) => {
@@ -555,8 +555,8 @@ export default function Vouchers() {
                   </div>
                 )}
                 {filesPorCuota[i] && !cuotaSubiendo && voucher.estado === "rechazado" && (
-                  <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl animate-in zoom-in-95">
-                    <p className="text-[10px] font-bold text-blue-600 truncate mb-3 italic">{filesPorCuota[i].name}</p>
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded-lg animate-in zoom-in-95">
+                    <p className="text-[8px] font-bold text-blue-600 truncate mb-1.5 italic">{filesPorCuota[i].name}</p>
                     <button
                       onClick={() => {
                         setFile(filesPorCuota[i]);
@@ -564,7 +564,7 @@ export default function Vouchers() {
                           esCuotaMensual ? subir(i, i, anioPeriodo) : subir(i);
                         }, 100);
                       }}
-                      className="w-full bg-blue-600 text-white py-3.5 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-blue-500/20"
+                      className="w-full bg-blue-600 text-white py-2 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm shadow-blue-500/20"
                     >
                       Confirmar Subida
                     </button>
@@ -572,20 +572,20 @@ export default function Vouchers() {
                 )}
               </div>
             ) : (
-              <div className="space-y-4">
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-slate-100 bg-slate-50/50 rounded-2xl cursor-pointer hover:bg-white hover:border-blue-400 transition-all group overflow-hidden relative">
+              <div className="space-y-2">
+                <label className="flex flex-col items-center justify-center w-full h-20 border-2 border-dashed border-slate-100 bg-slate-50/50 rounded-xl cursor-pointer hover:bg-white hover:border-blue-400 transition-all group overflow-hidden relative">
                   {(periodoSel?.nombre?.toLowerCase().includes("histórico") || periodoSel?.concepto?.toLowerCase().includes("histórico")) ? (
                     // ✅ MODO LECTURA para Históricos
-                    <div className="text-center p-6 grayscale opacity-50 cursor-not-allowed">
-                      <Clock className="h-6 w-6 text-slate-300 mx-auto mb-2" />
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Pago Histórico</p>
+                    <div className="text-center p-3 grayscale opacity-50 cursor-not-allowed">
+                      <Clock className="h-4 w-4 text-slate-300 mx-auto mb-1" />
+                      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Pago Histórico</p>
                     </div>
                   ) : (
                     // ✅ MODO SUBIDA NORMAL
                     <>
-                      <div className="text-center p-6 group-hover:scale-110 transition-transform">
-                        <FileText className="h-6 w-6 text-slate-300 mx-auto mb-2" />
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Subir Ahora</p>
+                      <div className="text-center p-3 group-hover:scale-110 transition-transform">
+                        <FileText className="h-4 w-4 text-slate-300 mx-auto mb-1" />
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Subir Ahora</p>
                       </div>
                       <input
                         type="file"
@@ -602,8 +602,8 @@ export default function Vouchers() {
                   )}
                 </label>
                 {filesPorCuota[i] && !cuotaSubiendo && (
-                  <div className="mt-4 p-5 bg-blue-50 border border-blue-100 rounded-2xl animate-in fade-in slide-in-from-bottom-2">
-                    <p className="text-[10px] font-bold text-blue-600 truncate mb-4 italic">{filesPorCuota[i].name}</p>
+                  <div className="mt-2 p-2 bg-blue-50 border border-blue-100 rounded-lg animate-in fade-in slide-in-from-bottom-2">
+                    <p className="text-[8px] font-bold text-blue-600 truncate mb-2 italic">{filesPorCuota[i].name}</p>
                     <button
                       onClick={() => {
                         setFile(filesPorCuota[i]);
@@ -611,7 +611,7 @@ export default function Vouchers() {
                           esCuotaMensual ? subir(i, i, anioPeriodo) : subir(i);
                         }, 100);
                       }}
-                      className="w-full bg-blue-600 text-white py-4 rounded-xl text-sm font-black uppercase tracking-widest shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+                      className="w-full bg-blue-600 text-white py-2 rounded-lg text-[9px] font-black uppercase tracking-widest shadow-sm shadow-blue-500/20 active:scale-95 transition-all"
                     >
                       Enviar Cuota {i}
                     </button>

@@ -458,7 +458,7 @@ export default function PagosMensuales() {
 
                 return supabase
                     .from("vouchers")
-                    .insert({ ...voucherData, created_at: new Date(fechaPago).toISOString() });
+                    .insert({ ...voucherData, created_at: `${fechaPago}T12:00:00` });
             });
 
             const results = await Promise.all(insertPromises);
