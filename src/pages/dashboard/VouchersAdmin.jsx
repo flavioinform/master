@@ -586,46 +586,72 @@ export default function VouchersAdmin() {
       return;
     }
 
-    const dataToExport = vouchersHistorial.map(v => {
-      // Si no tiene mes asignado, usar el mes de created_at
-      let mesCorresp = "N/A";
+    // ✅ CREAR TABLA PIVOTE: RUT x Meses
+    const pivotData = {};
+
+    vouchersHistorial.forEach(v => {
+      const rut = v.profiles?.rut || v.user_id;
+      const nombre = v.profiles?.nombre_completo || "Desconocido";
+
+      // Determinar el mes del pago
+      let mesNumero;
       if (v.mes) {
-        mesCorresp = MESES.find(m => m.n === v.mes)?.name;
+        mesNumero = v.mes;
       } else if (v.created_at) {
         const fechaPago = new Date(v.created_at);
-        const mesNumero = fechaPago.getMonth() + 1;
-        mesCorresp = MESES.find(m => m.n === mesNumero)?.name || "N/A";
+        mesNumero = fechaPago.getMonth() + 1;
       }
 
-      // Formatear cuota correctamente
-      let cuotaTexto = "Única";
-      if (v.total_cuotas && v.total_cuotas > 1) {
-        const numeroCuota = v.cuota_numero || 1;
-        cuotaTexto = `${numeroCuota}/${v.total_cuotas}`;
+      const mesNombre = MESES.find(m => m.n === mesNumero)?.name || "N/A";
+      const monto = v.monto_individual !== undefined && v.monto_individual !== null
+        ? v.monto_individual
+        : (v.payment_periods?.monto || 0);
+
+      // Inicializar fila si no existe
+      if (!pivotData[rut]) {
+        pivotData[rut] = {
+          "RUT": rut,
+          "Nombre": nombre,
+          "Enero": null,
+          "Febrero": null,
+          "Marzo": null,
+          "Abril": null,
+          "Mayo": null,
+          "Junio": null,
+          "Julio": null,
+          "Agosto": null,
+          "Septiembre": null,
+          "Octubre": null,
+          "Noviembre": null,
+          "Diciembre": null,
+          "Suma de Monto": 0
+        };
       }
 
-      return {
-        "Fecha Pago": new Date(v.created_at).toLocaleDateString(),
-        "RUT": v.profiles?.rut || v.user_id,
-        "Nombre": v.profiles?.nombre_completo || "Desconocido",
-        "Concepto": v.payment_periods?.concepto || "N/A",
-        "Periodo": v.payment_periods?.nombre || "N/A",
-        "Monto": v.monto_individual !== undefined && v.monto_individual !== null ? v.monto_individual : (v.payment_periods?.monto || 0),
-        "Cuota": cuotaTexto,
-        "Mes Corresp.": mesCorresp,
-        "Año Corresp.": v.anio || new Date(v.created_at).getFullYear(),
-        "Estado": v.estado
-      };
+      // Sumar el monto al mes correspondiente
+      if (mesNombre && mesNombre !== "N/A") {
+        if (pivotData[rut][mesNombre] === null) {
+          pivotData[rut][mesNombre] = monto;
+        } else {
+          pivotData[rut][mesNombre] += monto;
+        }
+        pivotData[rut]["Suma de Monto"] += monto;
+      }
+    });
+
+    // Convertir a array y ordenar por RUT
+    const dataToExport = Object.values(pivotData).sort((a, b) => {
+      const rutA = a.RUT.toString();
+      const rutB = b.RUT.toString();
+      return rutA.localeCompare(rutB);
     });
 
     // ✅ Generar nombre dinámico del archivo
     let fileName;
     if (mesHistorial !== "todos") {
-      // Si hay un mes específico seleccionado
       const mesNombre = MESES.find(m => m.n === parseInt(mesHistorial))?.name.toLowerCase();
       fileName = `reporte_de_pagos_${mesNombre}_${anioHistorial}.xlsx`;
     } else {
-      // Si es "todos los meses"
       fileName = `reporte_de_pagos_${anioHistorial}.xlsx`;
     }
 
