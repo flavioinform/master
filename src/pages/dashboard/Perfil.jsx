@@ -223,7 +223,7 @@ export default function Perfil() {
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, nombre_completo, rut, email")
+        .select("id, nombre_completo, rut, email, activo")
         .or(`rut.ilike.%${rut}%,rut.ilike.%${cleanedRut}%,nombre_completo.ilike.%${rut}%`)
         .limit(10);
 
@@ -398,8 +398,13 @@ export default function Perfil() {
                       onClick={() => selectUser(result.id)}
                       className="w-full text-left px-5 py-4 hover:bg-cyan-50/50 transition-colors border-b border-slate-50 last:border-b-0 flex items-center justify-between group"
                     >
-                      <div>
-                        <div className="font-bold text-slate-900 group-hover:text-cyan-700 transition-colors">{result.nombre_completo || "Sin nombre"}</div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="font-bold text-slate-900 group-hover:text-cyan-700 transition-colors">{result.nombre_completo || "Sin nombre"}</div>
+                          {result.activo === false && (
+                            <span className="bg-rose-100 text-rose-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ring-1 ring-rose-200">Retirado</span>
+                          )}
+                        </div>
                         <div className="text-xs font-bold text-slate-400">RUT: {result.rut}</div>
                       </div>
                       <span className="text-slate-300 group-hover:translate-x-1 transition-transform">→</span>

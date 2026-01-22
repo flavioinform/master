@@ -169,7 +169,7 @@ export default function VouchersAdmin() {
 
       const [{ data: profs, error: e3 }, { data: per, error: e4 }] = await Promise.all([
         userIds.length
-          ? supabase.from("profiles").select("id, nombre_completo, email, rut, numero_cuenta, banco").in("id", userIds)
+          ? supabase.from("profiles").select("id, nombre_completo, email, rut, numero_cuenta, banco, activo").in("id", userIds)
           : Promise.resolve({ data: [], error: null }),
         periodIds.length
           ? supabase.from("payment_periods").select("id, concepto, nombre, fecha_inicio, fecha_fin, monto").in("id", periodIds)
@@ -592,6 +592,7 @@ export default function VouchersAdmin() {
     vouchersHistorial.forEach(v => {
       const rut = v.profiles?.rut || v.user_id;
       const nombre = v.profiles?.nombre_completo || "Desconocido";
+      const estado = v.profiles?.activo !== false ? "Activo" : "Retirado";
 
       // Determinar el mes del pago
       let mesNumero;
@@ -612,6 +613,7 @@ export default function VouchersAdmin() {
         pivotData[rut] = {
           "RUT": rut,
           "Nombre": nombre,
+          "Estado": estado,
           "Enero": null,
           "Febrero": null,
           "Marzo": null,
@@ -645,6 +647,39 @@ export default function VouchersAdmin() {
       const rutB = b.RUT.toString();
       return rutA.localeCompare(rutB);
     });
+
+    // ✅ Calcular totales por mes
+    const totales = {
+      "RUT": "",
+      "Nombre": "TOTAL",
+      "Estado": "",
+      "Enero": 0,
+      "Febrero": 0,
+      "Marzo": 0,
+      "Abril": 0,
+      "Mayo": 0,
+      "Junio": 0,
+      "Julio": 0,
+      "Agosto": 0,
+      "Septiembre": 0,
+      "Octubre": 0,
+      "Noviembre": 0,
+      "Diciembre": 0,
+      "Suma de Monto": 0
+    };
+
+    // Sumar todos los montos de cada mes
+    dataToExport.forEach(row => {
+      MESES.forEach(mes => {
+        if (row[mes.name] !== null) {
+          totales[mes.name] += row[mes.name];
+        }
+      });
+      totales["Suma de Monto"] += row["Suma de Monto"];
+    });
+
+    // Agregar fila de totales al final
+    dataToExport.push(totales);
 
     // ✅ Generar nombre dinámico del archivo
     let fileName;
@@ -1235,8 +1270,15 @@ export default function VouchersAdmin() {
                             </div>
                           </td>
                           <td className="px-8 py-6">
-                            <div className="font-black text-slate-900 uppercase tracking-tight">{v.profiles?.nombre_completo}</div>
-                            <div className="text-xs font-bold text-slate-400 uppercase">{v.profiles?.rut}</div>
+                            <div className="flex items-center gap-2">
+                              <div>
+                                <div className="font-black text-slate-900 uppercase tracking-tight">{v.profiles?.nombre_completo}</div>
+                                <div className="text-xs font-bold text-slate-400 uppercase">{v.profiles?.rut}</div>
+                              </div>
+                              {v.profiles?.activo === false && (
+                                <span className="bg-rose-100 text-rose-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ring-1 ring-rose-200 whitespace-nowrap">Retirado</span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-8 py-6">
                             <div className="flex flex-col gap-1">
@@ -2083,9 +2125,14 @@ function VoucherCard({ v, onView, onReview, onDownload, onDelete, onEdit }) {
           <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center text-white text-lg font-black group-hover:scale-110 transition-transform">
             {v.profiles?.nombre_completo?.charAt(0) || "U"}
           </div>
-          <div>
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight leading-none mb-0.5">{v.profiles?.nombre_completo}</h3>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.15em]">{v.profiles?.rut}</p>
+          <div className="flex items-center gap-2">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight leading-none mb-0.5">{v.profiles?.nombre_completo}</h3>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.15em]">{v.profiles?.rut}</p>
+            </div>
+            {v.profiles?.activo === false && (
+              <span className="bg-rose-100 text-rose-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ring-1 ring-rose-200 whitespace-nowrap">Retirado</span>
+            )}
           </div>
         </div>
 
